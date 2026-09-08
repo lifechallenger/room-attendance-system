@@ -530,20 +530,9 @@ const APPS_SCRIPT_URL =
 
   let scanProcessed = false;
 
- let backendBridgeFrame = null;
-
-let backendBridgeReady = false;
-
-let pendingBackendPayload = null;
-
-let backendBridgeChannelId = null;
-
-let backendBridgeTimeoutId = null;
+ let backendBridgeTimeoutId = null;
 
 const BACKEND_TIMEOUT_MS = 20000;
-
-const BRIDGE_PARENT_ORIGIN =
-  'https://lifechallenger.github.io';
 
 
   /* =====================================================
@@ -554,59 +543,6 @@ const BRIDGE_PARENT_ORIGIN =
     'load',
     initializeGoogle
   );
-  /* =====================================================
-     APPS SCRIPT BRIDGE MESSAGE LISTENER
-     ===================================================== */
-
-  window.addEventListener('message', function(event) {
-    if (!event.data) return;
-
-    /*
-     * Apps Script HTMLService is wrapped in an additional Google
-     * iframe. Therefore event.source is NOT reliably equal to the
-     * outer iframe's contentWindow. Authenticate the response with
-     * a random channel ID instead.
-     */
-    const allowedOrigins = [
-      'https://script.googleusercontent.com',
-      'https://script.google.com'
-    ];
-
-    if (!allowedOrigins.includes(event.origin)) {
-      return;
-    }
-
-    if (event.data.channelId !== backendBridgeChannelId) {
-      return;
-    }
-
-    if (event.data.type === 'ROOM_ATTENDANCE_RESULT') {
-
-      clearBackendTimeout();
-
-      document.getElementById('loading').style.display = 'none';
-
-      const success = !!event.data.success;
-      const result = event.data.result;
-      let details = '';
-
-      if (result && typeof result === 'object') {
-        details = result.message
-          ? result.message
-          : JSON.stringify(result, null, 2);
-      } else {
-        details = String(result || '');
-      }
-
-      showResult(
-        success,
-        success ? 'Attendance Recorded' : 'Attendance Rejected',
-        details
-      );
-
-      cleanupBackendBridge();
-    }
-  });
 
 
   /* =====================================================
@@ -629,25 +565,13 @@ const BRIDGE_PARENT_ORIGIN =
       }
       scannerRunning = false;
     }
-
-    if (backendBridgeFrame) {
-      try {
-        backendBridgeFrame.remove();
-      } catch (error) {
-        console.warn('Bridge iframe removal warning:', error);
-      }
-    }
-
-    backendBridgeFrame = null;
-    backendBridgeChannelId = null;
-    pendingBackendPayload = null;
   }
 
   function handleBackendTimeout() {
     backendBridgeTimeoutId = null;
 
     console.warn(
-      'Timed out waiting for ROOM_ATTENDANCE_RESULT from backend bridge.'
+      'Timed out waiting for a response from the attendance backend.'
     );
 
     document.getElementById('loading').style.display = 'none';
@@ -877,7 +801,6 @@ const BRIDGE_PARENT_ORIGIN =
   if (scannerRunning) {
     return;
   }
-   openBackendBridge();
 
   scanProcessed = false;
   qrToken = null;
@@ -1563,103 +1486,95 @@ const BRIDGE_PARENT_ORIGIN =
 
 
   /* =====================================================
-     APPS SCRIPT BACKEND BRIDGE
+     APPS SCRIPT BACKEND CALL (JSONP)
      ===================================================== */
 
-  function makeChannelId() {
-    if (window.crypto && crypto.randomUUID) {
-      return crypto.randomUUID();
-    }
+  /*
+   * WHY JSONP INSTEAD OF fetch() OR AN IFRAME BRIDGE:
+   *
+   * - fetch() to the Apps Script /exec URL is blocked by CORS
+   *   (Apps Script does not return Access-Control-Allow-Origin
+   *   for this response chain), confirmed directly.
+   *
+   * - A hidden iframe calling google.script.run and relaying the
+   *   result back via postMessage (the previous approach) works
+   *   when the Apps Script URL is opened directly, but silently
+   *   fails to complete when embedded as a genuine third-party
+   *   iframe on a different origin (GitHub Pages here) -- this was
+   *   confirmed by live testing and is a known interaction between
+   *   Apps Script's internal sandboxed iframes and modern browser
+   *   third-party cookie/storage restrictions.
+   *
+   * - A <script src="..."> request is not subject to CORS or
+   *   third-party iframe restrictions at all. Apps Script's doGet()
+   *   detects the jsonp parameter and returns
+   *   "callbackName(result);" as JavaScript, which the browser
+   *   executes directly once the script loads. This is the JSONP
+   *   technique.
+   *
+   * TRADEOFF: unlike the old hash-fragment approach, the payload
+   * (including the Google ID token) now travels as a URL query
+   * parameter and will appear in the Apps Script execution log.
+   * The ID token is short-lived and is still verified server-side
+   * either way.
+   */
 
-    return 'ch_' + Date.now() + '_' +
-      Math.random().toString(36).slice(2) + '_' +
+  function jsonpCallbackName() {
+    return '__roomAttendanceCallback_' +
+      Date.now() + '_' +
       Math.random().toString(36).slice(2);
   }
 
-  function encodeBridgePayload(value) {
-    const bytes = new TextEncoder().encode(JSON.stringify(value));
-    let binary = '';
+  function submitViaJsonp(payload) {
 
-    for (let i = 0; i < bytes.length; i += 0x8000) {
-      binary += String.fromCharCode(
-        ...bytes.subarray(i, i + 0x8000)
-      );
-    }
+    return new Promise(function(resolve, reject) {
 
-    return btoa(binary)
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/g, '');
-  }
+      const callbackName = jsonpCallbackName();
+      const script = document.createElement('script');
 
-  function openBackendBridge() {
-    if (backendBridgeFrame) {
-      return true;
-    }
+      let settled = false;
 
-    backendBridgeChannelId = makeChannelId();
-    backendBridgeReady = false;
+      function cleanup() {
+        try {
+          delete window[callbackName];
+        } catch (error) {
+          window[callbackName] = undefined;
+        }
 
-    const iframe = document.createElement('iframe');
+        if (script.parentNode) {
+          script.parentNode.removeChild(script);
+        }
+      }
 
-    iframe.src = APPS_SCRIPT_URL + '?page=bridge';
-    iframe.title = 'Room Attendance Backend';
+      window[callbackName] = function(result) {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(result);
+      };
 
-    iframe.style.position = 'fixed';
-    iframe.style.width = '1px';
-    iframe.style.height = '1px';
-    iframe.style.border = '0';
-    iframe.style.opacity = '0';
-    iframe.style.pointerEvents = 'none';
-    iframe.style.left = '-10px';
-    iframe.style.top = '-10px';
+      script.onerror = function() {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(
+          new Error('Failed to reach the attendance backend.')
+        );
+      };
 
-    backendBridgeFrame = iframe;
-    document.body.appendChild(iframe);
+      script.src =
+        APPS_SCRIPT_URL +
+        '?jsonp=1' +
+        '&callback=' + encodeURIComponent(callbackName) +
+        '&data=' + encodeURIComponent(JSON.stringify(payload)) +
+        '&_=' + Date.now();
 
-    setScanStatus(
-      'Attendance backend ready for submission.',
-      'info'
-    );
-
-    return true;
+      document.body.appendChild(script);
+    });
   }
 
   function sendToBackend(payload) {
     console.log('Attendance payload:', payload);
-
-    pendingBackendPayload = payload;
-
-    if (!backendBridgeFrame) {
-      openBackendBridge();
-    }
-
-    /*
-     * IMPORTANT:
-     * Apps Script HTMLService is nested inside Google's iframe wrapper.
-     * A normal postMessage TO the outer iframe cannot reach the inner
-     * Apps Script page. Therefore the request is passed through the URL
-     * fragment. The fragment is read only by the Bridge page and is not
-     * sent to Google's server.
-     */
-    if (!backendBridgeChannelId) {
-      backendBridgeChannelId = makeChannelId();
-    }
-
-    const bridgePayload = {
-      channelId: backendBridgeChannelId,
-      payload: payload
-    };
-
-    const encoded = encodeBridgePayload(bridgePayload);
-    const requestId = Date.now() + '_' + Math.random().toString(36).slice(2);
-
-    backendBridgeFrame.src =
-      APPS_SCRIPT_URL +
-      '?page=bridge&request=' +
-      encodeURIComponent(requestId) +
-      '#data=' +
-      encoded;
 
     setScanStatus(
       'Verifying attendance...',
@@ -1672,6 +1587,45 @@ const BRIDGE_PARENT_ORIGIN =
       handleBackendTimeout,
       BACKEND_TIMEOUT_MS
     );
+
+    submitViaJsonp(payload)
+      .then(function(result) {
+
+        clearBackendTimeout();
+
+        document.getElementById('loading').style.display = 'none';
+
+        const success = !!(result && result.success);
+
+        const details =
+          result && result.message
+            ? result.message
+            : JSON.stringify(result, null, 2);
+
+        showResult(
+          success,
+          success ? 'Attendance Recorded' : 'Attendance Rejected',
+          details
+        );
+
+        cleanupBackendBridge();
+      })
+      .catch(function(error) {
+
+        clearBackendTimeout();
+
+        document.getElementById('loading').style.display = 'none';
+
+        console.error('Attendance submission failed:', error);
+
+        showResult(
+          false,
+          'Backend Error',
+          error && error.message ? error.message : String(error)
+        );
+
+        cleanupBackendBridge();
+      });
   }
 
   /* =====================================================
