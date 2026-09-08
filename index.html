@@ -1597,10 +1597,22 @@ const BACKEND_TIMEOUT_MS = 20000;
 
         const success = !!(result && result.success);
 
+        /*
+         * On a successful scan, show only the tick and title —
+         * no user name, room, distance, or timestamp. Those are
+         * already recorded in the Attendance sheet; showing them
+         * on-screen serves no purpose and exposes another
+         * person's details to whoever glances at the phone next.
+         * A rejection still shows its reason, since that's what
+         * tells someone what to fix (wrong location, unregistered
+         * QR, etc.).
+         */
         const details =
-          result && result.message
-            ? result.message
-            : JSON.stringify(result, null, 2);
+          success
+            ? ''
+            : (result && result.message
+                ? result.message
+                : JSON.stringify(result, null, 2));
 
         showResult(
           success,
@@ -1779,10 +1791,18 @@ const BACKEND_TIMEOUT_MS = 20000;
       title;
 
 
-    document.getElementById(
-      'resultDetails'
-    ).textContent =
-      details;
+    const detailsEl =
+      document.getElementById(
+        'resultDetails'
+      );
+
+    detailsEl.textContent =
+      details || '';
+
+    detailsEl.style.display =
+      details
+        ? 'block'
+        : 'none';
 
 
     result.style.display =
