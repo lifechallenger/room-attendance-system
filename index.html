@@ -524,11 +524,14 @@ const APPS_SCRIPT_URL =
 
   let scanProcessed = false;
 
-  let backendBridgeWindow = null;
+ let backendBridgeFrame = null;
 
 let backendBridgeReady = false;
 
 let pendingBackendPayload = null;
+
+const BRIDGE_PARENT_ORIGIN =
+  'https://lifechallenger.github.io';
 
 
   /* =====================================================
@@ -555,8 +558,38 @@ window.addEventListener(
 
 
     /*
-     * Apps Script bridge is ready.
+     * ---------------------------------------------------
+     * SECURITY CHECK 1
+     * Only accept messages from our Apps Script Bridge.
+     *
+     * Apps Script web app is cross-origin, so we cannot
+     * hard-code its origin here because deployments can
+     * change. Instead we verify the message source below.
+     * ---------------------------------------------------
      */
+
+    if (
+      !backendBridgeFrame ||
+      !backendBridgeFrame.contentWindow
+    ) {
+      return;
+    }
+
+
+    if (
+      event.source !==
+      backendBridgeFrame.contentWindow
+    ) {
+      return;
+    }
+
+
+    /*
+     * ---------------------------------------------------
+     * BRIDGE READY
+     * ---------------------------------------------------
+     */
+
     if (
       event.data.type ===
       'ROOM_ATTENDANCE_BRIDGE_READY'
@@ -575,13 +608,14 @@ window.addEventListener(
        * If attendance data was already waiting,
        * send it now.
        */
+
       if (
         pendingBackendPayload &&
-        backendBridgeWindow &&
-        !backendBridgeWindow.closed
+        backendBridgeFrame &&
+        backendBridgeFrame.contentWindow
       ) {
 
-        backendBridgeWindow.postMessage(
+        backendBridgeFrame.contentWindow.postMessage(
           {
             type:
               'ROOM_ATTENDANCE_SUBMIT',
@@ -589,6 +623,7 @@ window.addEventListener(
             payload:
               pendingBackendPayload
           },
+
           '*'
         );
 
@@ -604,8 +639,11 @@ window.addEventListener(
 
 
     /*
-     * Attendance result received.
+     * ---------------------------------------------------
+     * ATTENDANCE RESULT
+     * ---------------------------------------------------
      */
+
     if (
       event.data.type ===
       'ROOM_ATTENDANCE_RESULT'
@@ -632,6 +670,7 @@ window.addEventListener(
       /*
        * recordAttendance() returns an object.
        */
+
       if (
         result &&
         typeof result === 'object'
@@ -667,9 +706,11 @@ window.addEventListener(
 
       showResult(
         success,
+
         success
           ? 'Attendance Recorded'
           : 'Attendance Rejected',
+
         details
       );
 
@@ -677,6 +718,7 @@ window.addEventListener(
       /*
        * Stop scanner.
        */
+
       if (
         scannerRunning &&
         scanner
@@ -702,21 +744,19 @@ window.addEventListener(
 
 
       /*
-       * Close bridge window.
+       * Remove the hidden bridge iframe.
        */
-      if (
-        backendBridgeWindow &&
-        !backendBridgeWindow.closed
-      ) {
+
+      if (backendBridgeFrame) {
 
         try {
 
-          backendBridgeWindow.close();
+          backendBridgeFrame.remove();
 
         } catch (error) {
 
           console.warn(
-            'Bridge close warning:',
+            'Bridge iframe removal warning:',
             error
           );
 
@@ -725,11 +765,13 @@ window.addEventListener(
       }
 
 
-      backendBridgeWindow =
+      backendBridgeFrame =
         null;
+
 
       backendBridgeReady =
         false;
+
 
       pendingBackendPayload =
         null;
@@ -1609,8 +1651,8 @@ window.addEventListener(
 
 
     /*
-     * The actual Apps Script communication layer
-     * will be connected in the next step.
+     * Send the attendance payload to the Apps Script
+     * Bridge iframe.
      */
 
     const payload = {
@@ -1643,156 +1685,201 @@ window.addEventListener(
   /* =====================================================
      BACKEND BRIDGE
      ===================================================== */
-/* =====================================================
-   APPS SCRIPT BACKEND BRIDGE
-   ===================================================== */
-
-function openBackendBridge() {
 
   /*
-   * Reuse an existing bridge window.
+   * The Apps Script Bridge runs inside a hidden iframe.
+   *
+   * Camera and GPS stay on GitHub Pages.
+   * The iframe is used only for google.script.run().
    */
-  if (
-    backendBridgeWindow &&
-    !backendBridgeWindow.closed
-  ) {
+
+  function openBackendBridge() {
+
+    /*
+     * Reuse an existing bridge iframe.
+     */
+
+    if (
+      backendBridgeFrame &&
+      backendBridgeFrame.contentWindow
+    ) {
+
+      return true;
+
+    }
+
+
+    backendBridgeReady = false;
+
+
+    const bridgeUrl =
+      APPS_SCRIPT_URL +
+      '?page=bridge';
+
+
+    /*
+     * Create the Apps Script Bridge iframe.
+     */
+
+    const iframe =
+      document.createElement('iframe');
+
+
+    iframe.src =
+      bridgeUrl;
+
+
+    iframe.title =
+      'Room Attendance Backend';
+
+
+    /*
+     * Keep the iframe effectively invisible.
+     *
+     * Do not use display:none because keeping a normal
+     * rendered iframe makes browser behavior more predictable.
+     */
+
+    iframe.style.position =
+      'fixed';
+
+    iframe.style.width =
+      '1px';
+
+    iframe.style.height =
+      '1px';
+
+    iframe.style.border =
+      '0';
+
+    iframe.style.opacity =
+      '0';
+
+    iframe.style.pointerEvents =
+      'none';
+
+    iframe.style.left =
+      '-10px';
+
+    iframe.style.top =
+      '-10px';
+
+
+    /*
+     * Store the reference BEFORE appending the iframe.
+     *
+     * This is important because the Bridge may send its
+     * READY message immediately after loading.
+     */
+
+    backendBridgeFrame =
+      iframe;
+
+
+    document.body.appendChild(
+      iframe
+    );
+
+
+    setScanStatus(
+      'Connecting to attendance backend...',
+      'info'
+    );
+
 
     return true;
 
   }
 
 
-  backendBridgeReady =
-    false;
 
-
-  const bridgeUrl =
-    APPS_SCRIPT_URL +
-    '?page=bridge';
-
-
-  /*
-   * Open the Apps Script bridge.
-   *
-   * This function is called while the user
-   * is interacting with the scanner, allowing
-   * the browser to treat the popup as user-initiated.
-   */
-  backendBridgeWindow =
-    window.open(
-      bridgeUrl,
-      '_blank'
-    );
-
-
-  if (
-    !backendBridgeWindow
-  ) {
-
-    setScanStatus(
-      'Please allow pop-ups for this site so attendance can connect.',
-      'error'
-    );
-
-
-    return false;
-
-  }
-
-
-  setScanStatus(
-    'Connecting to attendance backend...',
-    'info'
-  );
-
-
-  return true;
-
-}
-
-
-function sendToBackend(
-  payload
-) {
-
-  console.log(
-    'Attendance payload:',
+  function sendToBackend(
     payload
-  );
-
-
-  /*
-   * Bridge is already ready.
-   */
-  if (
-    backendBridgeWindow &&
-    !backendBridgeWindow.closed &&
-    backendBridgeReady
   ) {
 
-    backendBridgeWindow.postMessage(
-      {
-        type:
-          'ROOM_ATTENDANCE_SUBMIT',
-
-        payload:
-          payload
-      },
-      '*'
+    console.log(
+      'Attendance payload:',
+      payload
     );
 
 
-    setScanStatus(
-      'Submitting attendance...',
-      'info'
-    );
+    /*
+     * If the Bridge is already ready, submit immediately.
+     */
 
+    if (
+      backendBridgeFrame &&
+      backendBridgeFrame.contentWindow &&
+      backendBridgeReady
+    ) {
 
-    return;
+      backendBridgeFrame.contentWindow.postMessage(
+        {
+          type:
+            'ROOM_ATTENDANCE_SUBMIT',
 
-  }
+          payload:
+            payload
+        },
 
-
-  /*
-   * Bridge isn't ready yet.
-   * Hold the payload until it announces
-   * that it is ready.
-   */
-  pendingBackendPayload =
-    payload;
-
-
-  /*
-   * Open the bridge if necessary.
-   */
-  if (
-    !backendBridgeWindow ||
-    backendBridgeWindow.closed
-  ) {
-
-    const opened =
-      openBackendBridge();
-
-
-    if (!opened) {
-
-      document.getElementById(
-        'loading'
-      ).style.display =
-        'none';
-
-
-      showResult(
-        false,
-        'Backend Connection Failed',
-        'The Apps Script backend window could not be opened. Please allow pop-ups and try again.'
+        '*'
       );
+
+
+      setScanStatus(
+        'Submitting attendance...',
+        'info'
+      );
+
+
+      return;
+
+    }
+
+
+    /*
+     * The Bridge is still loading.
+     *
+     * Keep the payload in memory until the Bridge sends
+     * ROOM_ATTENDANCE_BRIDGE_READY.
+     */
+
+    pendingBackendPayload =
+      payload;
+
+
+    /*
+     * Create the Bridge if it does not exist yet.
+     */
+
+    if (
+      !backendBridgeFrame ||
+      !backendBridgeFrame.contentWindow
+    ) {
+
+      const opened =
+        openBackendBridge();
+
+
+      if (!opened) {
+
+        document.getElementById(
+          'loading'
+        ).style.display =
+          'none';
+
+
+        showResult(
+          false,
+          'Backend Connection Failed',
+          'The Apps Script backend bridge could not be created. Please refresh the page and try again.'
+        );
+
+      }
 
     }
 
   }
-
-}
 
 
   /* =====================================================
