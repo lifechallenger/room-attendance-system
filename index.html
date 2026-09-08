@@ -1651,8 +1651,8 @@ window.addEventListener(
 
 
     /*
-     * Send the attendance payload to the Apps Script
-     * Bridge iframe.
+     * The actual Apps Script communication layer
+     * will be connected in the next step.
      */
 
     const payload = {
@@ -1685,201 +1685,197 @@ window.addEventListener(
   /* =====================================================
      BACKEND BRIDGE
      ===================================================== */
+/* =====================================================
+   APPS SCRIPT BACKEND BRIDGE
+   ===================================================== */
+
+function openBackendBridge() {
 
   /*
-   * The Apps Script Bridge runs inside a hidden iframe.
-   *
-   * Camera and GPS stay on GitHub Pages.
-   * The iframe is used only for google.script.run().
+   * Reuse an existing bridge iframe.
    */
 
-  function openBackendBridge() {
-
-    /*
-     * Reuse an existing bridge iframe.
-     */
-
-    if (
-      backendBridgeFrame &&
-      backendBridgeFrame.contentWindow
-    ) {
-
-      return true;
-
-    }
-
-
-    backendBridgeReady = false;
-
-
-    const bridgeUrl =
-      APPS_SCRIPT_URL +
-      '?page=bridge';
-
-
-    /*
-     * Create the Apps Script Bridge iframe.
-     */
-
-    const iframe =
-      document.createElement('iframe');
-
-
-    iframe.src =
-      bridgeUrl;
-
-
-    iframe.title =
-      'Room Attendance Backend';
-
-
-    /*
-     * Keep the iframe effectively invisible.
-     *
-     * Do not use display:none because keeping a normal
-     * rendered iframe makes browser behavior more predictable.
-     */
-
-    iframe.style.position =
-      'fixed';
-
-    iframe.style.width =
-      '1px';
-
-    iframe.style.height =
-      '1px';
-
-    iframe.style.border =
-      '0';
-
-    iframe.style.opacity =
-      '0';
-
-    iframe.style.pointerEvents =
-      'none';
-
-    iframe.style.left =
-      '-10px';
-
-    iframe.style.top =
-      '-10px';
-
-
-    /*
-     * Store the reference BEFORE appending the iframe.
-     *
-     * This is important because the Bridge may send its
-     * READY message immediately after loading.
-     */
-
-    backendBridgeFrame =
-      iframe;
-
-
-    document.body.appendChild(
-      iframe
-    );
-
-
-    setScanStatus(
-      'Connecting to attendance backend...',
-      'info'
-    );
-
+  if (
+    backendBridgeFrame &&
+    backendBridgeFrame.contentWindow
+  ) {
 
     return true;
 
   }
 
 
+  backendBridgeReady =
+    false;
 
-  function sendToBackend(
+
+  const bridgeUrl =
+    APPS_SCRIPT_URL +
+    '?page=bridge';
+
+
+  /*
+   * Create hidden iframe.
+   *
+   * The iframe hosts the Apps Script Bridge.
+   * Camera and GPS remain on the GitHub page.
+   */
+
+  const iframe =
+    document.createElement('iframe');
+
+
+  iframe.src =
+    bridgeUrl;
+
+
+  iframe.title =
+    'Room Attendance Backend';
+
+
+  /*
+   * Keep the iframe effectively invisible while
+   * allowing the Apps Script page to operate normally.
+   */
+
+  iframe.style.position =
+    'fixed';
+
+  iframe.style.width =
+    '1px';
+
+  iframe.style.height =
+    '1px';
+
+  iframe.style.border =
+    '0';
+
+  iframe.style.opacity =
+    '0';
+
+  iframe.style.pointerEvents =
+    'none';
+
+  iframe.style.left =
+    '-10px';
+
+  iframe.style.top =
+    '-10px';
+
+
+  /*
+   * Store reference before adding iframe.
+   * This is important because the Bridge can send
+   * ROOM_ATTENDANCE_BRIDGE_READY very quickly.
+   */
+
+  backendBridgeFrame =
+    iframe;
+
+
+  document.body.appendChild(
+    iframe
+  );
+
+
+  setScanStatus(
+    'Connecting to attendance backend...',
+    'info'
+  );
+
+
+  return true;
+}
+
+
+
+function sendToBackend(
+  payload
+) {
+
+  console.log(
+    'Attendance payload:',
     payload
+  );
+
+
+  /*
+   * Bridge is already ready.
+   */
+
+  if (
+    backendBridgeFrame &&
+    backendBridgeFrame.contentWindow &&
+    backendBridgeReady
   ) {
 
-    console.log(
-      'Attendance payload:',
-      payload
+    backendBridgeFrame.contentWindow.postMessage(
+      {
+        type:
+          'ROOM_ATTENDANCE_SUBMIT',
+
+        payload:
+          payload
+      },
+
+      '*'
     );
 
 
-    /*
-     * If the Bridge is already ready, submit immediately.
-     */
+    setScanStatus(
+      'Submitting attendance...',
+      'info'
+    );
 
-    if (
-      backendBridgeFrame &&
-      backendBridgeFrame.contentWindow &&
-      backendBridgeReady
-    ) {
 
-      backendBridgeFrame.contentWindow.postMessage(
-        {
-          type:
-            'ROOM_ATTENDANCE_SUBMIT',
+    return;
 
-          payload:
-            payload
-        },
+  }
 
-        '*'
+
+  /*
+   * Bridge isn't ready yet.
+   *
+   * Hold the payload until the Bridge announces
+   * that it is ready.
+   */
+
+  pendingBackendPayload =
+    payload;
+
+
+  /*
+   * Open/create the bridge if necessary.
+   */
+
+  if (
+    !backendBridgeFrame ||
+    !backendBridgeFrame.contentWindow
+  ) {
+
+    const opened =
+      openBackendBridge();
+
+
+    if (!opened) {
+
+      document.getElementById(
+        'loading'
+      ).style.display =
+        'none';
+
+
+      showResult(
+        false,
+        'Backend Connection Failed',
+        'The Apps Script backend bridge could not be created. Please refresh the page and try again.'
       );
-
-
-      setScanStatus(
-        'Submitting attendance...',
-        'info'
-      );
-
-
-      return;
-
-    }
-
-
-    /*
-     * The Bridge is still loading.
-     *
-     * Keep the payload in memory until the Bridge sends
-     * ROOM_ATTENDANCE_BRIDGE_READY.
-     */
-
-    pendingBackendPayload =
-      payload;
-
-
-    /*
-     * Create the Bridge if it does not exist yet.
-     */
-
-    if (
-      !backendBridgeFrame ||
-      !backendBridgeFrame.contentWindow
-    ) {
-
-      const opened =
-        openBackendBridge();
-
-
-      if (!opened) {
-
-        document.getElementById(
-          'loading'
-        ).style.display =
-          'none';
-
-
-        showResult(
-          false,
-          'Backend Connection Failed',
-          'The Apps Script backend bridge could not be created. Please refresh the page and try again.'
-        );
-
-      }
 
     }
 
   }
+
+}
 
 
   /* =====================================================
