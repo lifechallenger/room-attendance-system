@@ -737,171 +737,354 @@
      CAMERA
      ===================================================== */
 
-  async function startScanner() {
+ async function startScanner() {
 
-    if (!googleIdToken) {
+  if (!googleIdToken) {
+    setScanStatus(
+      'Please sign in with Google first.',
+      'error'
+    );
+    return;
+  }
 
-      setScanStatus(
-        'Please sign in with Google first.',
-        'error'
+  if (scannerRunning) {
+    return;
+  }
+
+  scanProcessed = false;
+  qrToken = null;
+
+  document.getElementById(
+    'scannerPlaceholder'
+  ).classList.add('hidden');
+
+  document.getElementById(
+    'reader'
+  ).classList.remove('hidden');
+
+  document.getElementById(
+    'startButton'
+  ).classList.add('hidden');
+
+  document.getElementById(
+    'stopButton'
+  ).classList.remove('hidden');
+
+  setScanStatus(
+    'Requesting camera access...',
+    'info'
+  );
+
+  try {
+
+    /*
+     * STEP 1
+     * Explicitly request camera permission.
+     *
+     * This is important for mobile browsers because
+     * camera labels may remain unavailable until
+     * permission has been granted.
+     */
+
+    if (
+      !navigator.mediaDevices ||
+      !navigator.mediaDevices.getUserMedia
+    ) {
+
+      throw new Error(
+        'Camera API is not supported by this browser.'
       );
 
-      return;
     }
 
-
-    if (scannerRunning) {
-      return;
-    }
-
-
-    scanProcessed = false;
-
-    qrToken = null;
-
-
-    document.getElementById(
-      'scannerPlaceholder'
-    ).classList.add(
-      'hidden'
-    );
-
-
-    document.getElementById(
-      'reader'
-    ).classList.remove(
-      'hidden'
-    );
-
-
-    document.getElementById(
-      'startButton'
-    ).classList.add(
-      'hidden'
-    );
-
-
-    document.getElementById(
-      'stopButton'
-    ).classList.remove(
-      'hidden'
-    );
-
-
-    setScanStatus(
-      'Starting camera...',
-      'info'
-    );
-
-
-    try {
-
-      scanner =
-        new Html5Qrcode(
-          'reader'
-        );
-
-
-      /*
-       * Direct Html5Qrcode API.
-       *
-       * No file/gallery scanning UI is created.
-       */
-
-      await scanner.start(
-
-        {
+    const permissionStream =
+      await navigator.mediaDevices.getUserMedia({
+        video: {
           facingMode: {
             ideal: 'environment'
           }
         },
-
-        {
-          fps: 10,
-
-          qrbox: function(
-            width,
-            height
-          ) {
-
-            const size =
-              Math.floor(
-                Math.min(
-                  width,
-                  height
-                ) * .70
-              );
-
-            return {
-              width: size,
-              height: size
-            };
-
-          }
-
-        },
-
-        handleQrCode,
-
-        function() {
-          // Ignore normal scan misses.
-        }
-
-      );
+        audio: false
+      });
 
 
-      scannerRunning = true;
+    /*
+     * Permission has been granted.
+     *
+     * Stop this temporary stream because
+     * html5-qrcode will create its own stream.
+     */
+
+    permissionStream
+      .getTracks()
+      .forEach(function(track) {
+        track.stop();
+      });
 
 
-      setScanStatus(
-        'Camera active. Point it at the room QR code.',
-        'info'
-      );
-
-    } catch (error) {
-
-      console.error(
-        error
-      );
+    setScanStatus(
+      'Camera permission granted. Detecting cameras...',
+      'info'
+    );
 
 
-      scannerRunning = false;
+    /*
+     * STEP 2
+     * Ask html5-qrcode for available cameras.
+     */
+
+    const cameras =
+      await Html5Qrcode.getCameras();
 
 
-      document.getElementById(
-        'reader'
-      ).classList.add(
-        'hidden'
-      );
+    if (
+      !cameras ||
+      cameras.length === 0
+    ) {
 
-
-      document.getElementById(
-        'scannerPlaceholder'
-      ).classList.remove(
-        'hidden'
-      );
-
-
-      document.getElementById(
-        'startButton'
-      ).classList.remove(
-        'hidden'
-      );
-
-
-      document.getElementById(
-        'stopButton'
-      ).classList.add(
-        'hidden'
-      );
-
-
-      setScanStatus(
-        'Unable to access the camera. Please allow camera permission and try again.',
-        'error'
+      throw new Error(
+        'No camera was detected on this device.'
       );
 
     }
+
+
+    /*
+     * STEP 3
+     * Prefer the rear/environment camera.
+     *
+     * Camera labels become available after
+     * permission has been granted.
+     */
+
+    let selectedCamera =
+      cameras.find(function(camera) {
+
+        const label =
+          String(
+            camera.label || ''
+          ).toLowerCase();
+
+        return (
+          label.includes('back') ||
+          label.includes('rear') ||
+          label.includes('environment')
+        );
+
+      });
+
+
+    /*
+     * If the browser does not expose a useful
+     * camera label, use the last available camera.
+     *
+     * On many mobile devices this corresponds
+     * to the rear camera.
+     */
+
+    if (!selectedCamera) {
+      selectedCamera =
+        cameras[cameras.length - 1];
+    }
+
+
+    console.log(
+      'Available cameras:',
+      cameras
+    );
+
+    console.log(
+      'Selected camera:',
+      selectedCamera
+    );
+
+
+    setScanStatus(
+      'Starting rear camera...',
+      'info'
+    );
+
+
+    /*
+     * STEP 4
+     * Create the QR scanner.
+     */
+
+    scanner =
+      new Html5Qrcode(
+        'reader'
+      );
+
+
+    /*
+     * STEP 5
+     * Start using the selected physical camera.
+     *
+     * No file/gallery scanning UI is enabled.
+     */
+
+    await scanner.start(
+
+      selectedCamera.id,
+
+      {
+        fps: 10,
+
+        qrbox: function(
+          width,
+          height
+        ) {
+
+          const size =
+            Math.floor(
+              Math.min(
+                width,
+                height
+              ) * 0.70
+            );
+
+          return {
+            width: size,
+            height: size
+          };
+
+        }
+
+      },
+
+      handleQrCode,
+
+      function(errorMessage) {
+        /*
+         * Normal QR scan misses are ignored.
+         */
+      }
+
+    );
+
+
+    scannerRunning = true;
+
+
+    setScanStatus(
+      'Camera active. Point it at the room QR code.',
+      'info'
+    );
+
+
+  } catch (error) {
+
+    console.error(
+      'Camera initialization failed:',
+      error
+    );
+
+
+    scannerRunning = false;
+
+
+    /*
+     * Try to clean up any partially
+     * initialized scanner.
+     */
+
+    try {
+
+      if (scanner) {
+
+        await scanner.stop();
+
+      }
+
+    } catch (stopError) {
+
+      console.log(
+        'Scanner stop error:',
+        stopError
+      );
+
+    }
+
+
+    try {
+
+      if (scanner) {
+
+        scanner.clear();
+
+      }
+
+    } catch (clearError) {
+
+      console.log(
+        'Scanner clear error:',
+        clearError
+      );
+
+    }
+
+
+    scanner = null;
+
+
+    document.getElementById(
+      'reader'
+    ).classList.add('hidden');
+
+
+    document.getElementById(
+      'scannerPlaceholder'
+    ).classList.remove('hidden');
+
+
+    document.getElementById(
+      'startButton'
+    ).classList.remove('hidden');
+
+
+    document.getElementById(
+      'stopButton'
+    ).classList.add('hidden');
+
+
+    /*
+     * IMPORTANT:
+     * Show the actual browser error instead
+     * of hiding it behind a generic message.
+     */
+
+    let message =
+      'Unable to access the camera.';
+
+    if (error) {
+
+      if (error.name) {
+
+        message +=
+          ' Error: ' +
+          error.name;
+
+      }
+
+      if (error.message) {
+
+        message +=
+          ' — ' +
+          error.message;
+
+      }
+
+    }
+
+
+    setScanStatus(
+      message,
+      'error'
+    );
+
+  }
+
+}   }
 
   }
 
