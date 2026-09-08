@@ -1,0 +1,1469 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+
+  <meta name="viewport"
+        content="width=device-width,
+                 initial-scale=1,
+                 maximum-scale=1,
+                 user-scalable=no">
+
+  <meta name="theme-color"
+        content="#1a73e8">
+
+  <title>Room Attendance</title>
+
+  <!-- Google Identity Services -->
+  <script src="https://accounts.google.com/gsi/client"
+          async
+          defer></script>
+
+  <!-- QR scanner -->
+  <script src="https://unpkg.com/html5-qrcode"
+          type="text/javascript"></script>
+
+  <style>
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: #f5f7fa;
+      color: #202124;
+      font-family:
+        Arial,
+        Helvetica,
+        sans-serif;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 520px;
+      margin: auto;
+      padding: 20px 16px 40px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 26px;
+    }
+
+    .header p {
+      margin: 8px 0 0;
+      color: #5f6368;
+      font-size: 14px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow:
+        0 2px 8px rgba(0,0,0,.08);
+    }
+
+    .title {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 14px;
+    }
+
+    #googleButton {
+      display: flex;
+      justify-content: center;
+      min-height: 44px;
+    }
+
+    #userInfo {
+      display: none;
+      text-align: center;
+    }
+
+    #userName {
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    #userEmail {
+      margin-top: 5px;
+      color: #5f6368;
+      font-size: 13px;
+      word-break: break-all;
+    }
+
+    .status {
+      margin-top: 14px;
+      padding: 12px;
+      border-radius: 10px;
+      font-size: 14px;
+      line-height: 1.4;
+      display: none;
+    }
+
+    .status.info {
+      display: block;
+      background: #e8f0fe;
+      color: #174ea6;
+    }
+
+    .status.success {
+      display: block;
+      background: #e6f4ea;
+      color: #137333;
+    }
+
+    .status.error {
+      display: block;
+      background: #fce8e6;
+      color: #c5221f;
+    }
+
+    #reader {
+      width: 100%;
+      overflow: hidden;
+      border-radius: 14px;
+      background: #000;
+    }
+
+    #reader video {
+      width: 100% !important;
+      height: auto !important;
+    }
+
+    .placeholder {
+      min-height: 260px;
+      background: #111;
+      color: white;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 30px;
+      line-height: 1.5;
+    }
+
+    button {
+      width: 100%;
+      border: 0;
+      border-radius: 10px;
+      padding: 14px;
+      margin-top: 12px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .primary {
+      background: #1a73e8;
+      color: white;
+    }
+
+    .secondary {
+      background: white;
+      color: #1a73e8;
+      border: 1px solid #dadce0;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .location-row {
+      font-size: 14px;
+      line-height: 1.8;
+    }
+
+    .location-row strong {
+      font-weight: 700;
+    }
+
+    #loading {
+      display: none;
+      text-align: center;
+      color: #5f6368;
+    }
+
+    .spinner {
+      width: 22px;
+      height: 22px;
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 8px;
+      border: 3px solid #dadce0;
+      border-top-color: #1a73e8;
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    #result {
+      display: none;
+      text-align: center;
+    }
+
+    #resultIcon {
+      font-size: 48px;
+      margin-bottom: 8px;
+    }
+
+    #resultTitle {
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    #resultDetails {
+      margin-top: 10px;
+      color: #5f6368;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .instructions {
+      color: #5f6368;
+      font-size: 13px;
+      line-height: 1.7;
+      padding-left: 20px;
+    }
+
+    footer {
+      text-align: center;
+      color: #80868b;
+      font-size: 11px;
+      margin-top: 20px;
+    }
+
+  </style>
+</head>
+
+
+<body>
+
+<div class="container">
+
+  <div class="header">
+
+    <h1>Room Attendance</h1>
+
+    <p>
+      Scan the room QR code to record attendance
+    </p>
+
+  </div>
+
+
+  <!-- =====================================================
+       GOOGLE SIGN IN
+       ===================================================== -->
+
+  <div class="card">
+
+    <div class="title">
+      1. Google Authentication
+    </div>
+
+    <div id="googleButton"></div>
+
+    <div id="userInfo">
+
+      <div id="userName"></div>
+
+      <div id="userEmail"></div>
+
+    </div>
+
+    <div id="authStatus"
+         class="status info">
+
+      Please sign in with Google.
+
+    </div>
+
+  </div>
+
+
+  <!-- =====================================================
+       QR SCANNER
+       ===================================================== -->
+
+  <div id="scannerCard"
+       class="card hidden">
+
+    <div class="title">
+      2. Scan Room QR Code
+    </div>
+
+    <div id="scannerPlaceholder"
+         class="placeholder">
+
+      Press "Start Camera" to begin scanning.
+
+    </div>
+
+    <div id="reader"
+         class="hidden">
+    </div>
+
+    <button id="startButton"
+            class="primary"
+            onclick="startScanner()">
+
+      Start Camera
+
+    </button>
+
+    <button id="stopButton"
+            class="secondary hidden"
+            onclick="stopScanner()">
+
+      Stop Camera
+
+    </button>
+
+    <div id="scanStatus"
+         class="status info">
+
+      Camera is not running.
+
+    </div>
+
+  </div>
+
+
+  <!-- =====================================================
+       LOCATION
+       ===================================================== -->
+
+  <div id="locationCard"
+       class="card hidden">
+
+    <div class="title">
+      3. Location Verification
+    </div>
+
+    <div class="location-row">
+
+      GPS Status:
+      <strong id="gpsStatus">
+        Waiting
+      </strong>
+
+      <br>
+
+      Latitude:
+      <strong id="latitude">
+        —
+      </strong>
+
+      <br>
+
+      Longitude:
+      <strong id="longitude">
+        —
+      </strong>
+
+      <br>
+
+      Accuracy:
+      <strong id="accuracy">
+        —
+      </strong>
+
+    </div>
+
+  </div>
+
+
+  <!-- =====================================================
+       LOADING
+       ===================================================== -->
+
+  <div id="loading"
+       class="card">
+
+    <span class="spinner"></span>
+
+    Verifying attendance...
+
+  </div>
+
+
+  <!-- =====================================================
+       RESULT
+       ===================================================== -->
+
+  <div id="result"
+       class="card">
+
+    <div id="resultIcon"></div>
+
+    <div id="resultTitle"></div>
+
+    <div id="resultDetails"></div>
+
+    <button class="primary"
+            onclick="resetScanner()">
+
+      Scan Again
+
+    </button>
+
+  </div>
+
+
+  <!-- =====================================================
+       INSTRUCTIONS
+       ===================================================== -->
+
+  <div id="instructions"
+       class="card hidden">
+
+    <div class="title">
+      How it works
+    </div>
+
+    <ol class="instructions">
+
+      <li>
+        Sign in with your Google account.
+      </li>
+
+      <li>
+        Allow camera access.
+      </li>
+
+      <li>
+        Scan the QR code physically displayed
+        in the room.
+      </li>
+
+      <li>
+        Allow location access.
+      </li>
+
+      <li>
+        The server verifies everything before
+        recording attendance.
+      </li>
+
+    </ol>
+
+  </div>
+
+
+  <footer>
+    Room Attendance System
+  </footer>
+
+</div>
+
+
+<script>
+
+  /* =====================================================
+     CONFIGURATION
+     ===================================================== */
+
+  const GOOGLE_CLIENT_ID =
+    '802356095167-6hnm5bt2irke0mg7idv17132lsbtknct.apps.googleusercontent.com';
+
+
+  /*
+   * We will insert your Apps Script Web App URL here
+   * after the backend communication layer is added.
+   */
+
+  const APPS_SCRIPT_URL =
+    'PASTE_APPS_SCRIPT_WEB_APP_URL_HERE';
+
+
+  /*
+   * IMPORTANT:
+   *
+   * Put your GitHub Pages origin into Google Cloud
+   * as an Authorized JavaScript origin.
+   *
+   * Example:
+   *
+   * https://YOUR_USERNAME.github.io
+   */
+
+
+  /* =====================================================
+     STATE
+     ===================================================== */
+
+  let googleIdToken = null;
+
+  let scanner = null;
+
+  let scannerRunning = false;
+
+  let qrToken = null;
+
+  let latitude = null;
+
+  let longitude = null;
+
+  let gpsAccuracy = null;
+
+  let scanProcessed = false;
+
+
+  /* =====================================================
+     INITIALIZATION
+     ===================================================== */
+
+  window.addEventListener(
+    'load',
+    initializeGoogle
+  );
+
+
+  /* =====================================================
+     GOOGLE SIGN IN
+     ===================================================== */
+
+  function initializeGoogle() {
+
+    if (
+      !window.google ||
+      !google.accounts ||
+      !google.accounts.id
+    ) {
+
+      setTimeout(
+        initializeGoogle,
+        300
+      );
+
+      return;
+    }
+
+
+    google.accounts.id.initialize({
+
+      client_id:
+        GOOGLE_CLIENT_ID,
+
+      callback:
+        handleGoogleCredential,
+
+      auto_select:
+        false,
+
+      cancel_on_tap_outside:
+        true
+
+    });
+
+
+    google.accounts.id.renderButton(
+
+      document.getElementById(
+        'googleButton'
+      ),
+
+      {
+        type: 'standard',
+        theme: 'outline',
+        size: 'large',
+        text: 'signin_with',
+        shape: 'rectangular',
+        width: 300
+      }
+
+    );
+
+  }
+
+
+  /* =====================================================
+     GOOGLE CREDENTIAL
+     ===================================================== */
+
+  function handleGoogleCredential(
+    response
+  ) {
+
+    if (
+      !response ||
+      !response.credential
+    ) {
+
+      setAuthStatus(
+        'Google authentication failed.',
+        'error'
+      );
+
+      return;
+    }
+
+
+    googleIdToken =
+      response.credential;
+
+
+    /*
+     * Decode only for display.
+     *
+     * The backend remains responsible for
+     * validating the ID token.
+     */
+
+    const profile =
+      decodeJwt(
+        googleIdToken
+      );
+
+
+    document.getElementById(
+      'userName'
+    ).textContent =
+      profile?.name ||
+      'Google User';
+
+
+    document.getElementById(
+      'userEmail'
+    ).textContent =
+      profile?.email ||
+      '';
+
+
+    document.getElementById(
+      'googleButton'
+    ).classList.add(
+      'hidden'
+    );
+
+
+    document.getElementById(
+      'userInfo'
+    ).style.display =
+      'block';
+
+
+    setAuthStatus(
+      'Google authentication successful.',
+      'success'
+    );
+
+
+    document.getElementById(
+      'scannerCard'
+    ).classList.remove(
+      'hidden'
+    );
+
+
+    document.getElementById(
+      'instructions'
+    ).classList.remove(
+      'hidden'
+    );
+
+  }
+
+
+  /* =====================================================
+     JWT DISPLAY DECODER
+     ===================================================== */
+
+  function decodeJwt(
+    token
+  ) {
+
+    try {
+
+      const parts =
+        token.split('.');
+
+      if (
+        parts.length !== 3
+      ) {
+        return null;
+      }
+
+      const base64 =
+        parts[1]
+          .replace(/-/g, '+')
+          .replace(/_/g, '/');
+
+      const json =
+        decodeURIComponent(
+          atob(base64)
+            .split('')
+            .map(function(c) {
+
+              return '%' +
+                (
+                  '00' +
+                  c.charCodeAt(0)
+                    .toString(16)
+                ).slice(-2);
+
+            })
+            .join('')
+        );
+
+      return JSON.parse(json);
+
+    } catch (e) {
+
+      return null;
+
+    }
+
+  }
+
+
+  /* =====================================================
+     CAMERA
+     ===================================================== */
+
+  async function startScanner() {
+
+    if (!googleIdToken) {
+
+      setScanStatus(
+        'Please sign in with Google first.',
+        'error'
+      );
+
+      return;
+    }
+
+
+    if (scannerRunning) {
+      return;
+    }
+
+
+    scanProcessed = false;
+
+    qrToken = null;
+
+
+    document.getElementById(
+      'scannerPlaceholder'
+    ).classList.add(
+      'hidden'
+    );
+
+
+    document.getElementById(
+      'reader'
+    ).classList.remove(
+      'hidden'
+    );
+
+
+    document.getElementById(
+      'startButton'
+    ).classList.add(
+      'hidden'
+    );
+
+
+    document.getElementById(
+      'stopButton'
+    ).classList.remove(
+      'hidden'
+    );
+
+
+    setScanStatus(
+      'Starting camera...',
+      'info'
+    );
+
+
+    try {
+
+      scanner =
+        new Html5Qrcode(
+          'reader'
+        );
+
+
+      /*
+       * Direct Html5Qrcode API.
+       *
+       * No file/gallery scanning UI is created.
+       */
+
+      await scanner.start(
+
+        {
+          facingMode: {
+            ideal: 'environment'
+          }
+        },
+
+        {
+          fps: 10,
+
+          qrbox: function(
+            width,
+            height
+          ) {
+
+            const size =
+              Math.floor(
+                Math.min(
+                  width,
+                  height
+                ) * .70
+              );
+
+            return {
+              width: size,
+              height: size
+            };
+
+          }
+
+        },
+
+        handleQrCode,
+
+        function() {
+          // Ignore normal scan misses.
+        }
+
+      );
+
+
+      scannerRunning = true;
+
+
+      setScanStatus(
+        'Camera active. Point it at the room QR code.',
+        'info'
+      );
+
+    } catch (error) {
+
+      console.error(
+        error
+      );
+
+
+      scannerRunning = false;
+
+
+      document.getElementById(
+        'reader'
+      ).classList.add(
+        'hidden'
+      );
+
+
+      document.getElementById(
+        'scannerPlaceholder'
+      ).classList.remove(
+        'hidden'
+      );
+
+
+      document.getElementById(
+        'startButton'
+      ).classList.remove(
+        'hidden'
+      );
+
+
+      document.getElementById(
+        'stopButton'
+      ).classList.add(
+        'hidden'
+      );
+
+
+      setScanStatus(
+        'Unable to access the camera. Please allow camera permission and try again.',
+        'error'
+      );
+
+    }
+
+  }
+
+
+  /* =====================================================
+     QR DETECTED
+     ===================================================== */
+
+  function handleQrCode(
+    decodedText
+  ) {
+
+    if (scanProcessed) {
+      return;
+    }
+
+
+    if (!decodedText) {
+      return;
+    }
+
+
+    scanProcessed = true;
+
+
+    qrToken =
+      extractQrToken(
+        decodedText
+      );
+
+
+    if (!qrToken) {
+
+      scanProcessed = false;
+
+      setScanStatus(
+        'Invalid attendance QR code.',
+        'error'
+      );
+
+      return;
+    }
+
+
+    setScanStatus(
+      'QR detected. Obtaining GPS location...',
+      'success'
+    );
+
+
+    stopScanner()
+      .finally(
+        requestGps
+      );
+
+  }
+
+
+  /* =====================================================
+     QR TOKEN
+     ===================================================== */
+
+  function extractQrToken(
+    value
+  ) {
+
+    value =
+      String(
+        value || ''
+      ).trim();
+
+
+    if (!value) {
+      return null;
+    }
+
+
+    if (
+      value.startsWith(
+        'ROOM_ATTENDANCE|'
+      )
+    ) {
+
+      return value
+        .substring(
+          'ROOM_ATTENDANCE|'.length
+        )
+        .trim();
+
+    }
+
+
+    return value;
+
+  }
+
+
+  /* =====================================================
+     STOP CAMERA
+     ===================================================== */
+
+  async function stopScanner() {
+
+    if (!scanner) {
+      return;
+    }
+
+
+    try {
+
+      if (scannerRunning) {
+        await scanner.stop();
+      }
+
+    } catch (e) {
+
+      console.log(e);
+
+    }
+
+
+    try {
+
+      scanner.clear();
+
+    } catch (e) {
+
+      console.log(e);
+
+    }
+
+
+    scanner = null;
+
+    scannerRunning = false;
+
+
+    document.getElementById(
+      'reader'
+    ).classList.add(
+      'hidden'
+    );
+
+
+    document.getElementById(
+      'scannerPlaceholder'
+    ).classList.remove(
+      'hidden'
+    );
+
+
+    document.getElementById(
+      'startButton'
+    ).classList.remove(
+      'hidden'
+    );
+
+
+    document.getElementById(
+      'stopButton'
+    ).classList.add(
+      'hidden'
+    );
+
+  }
+
+
+  /* =====================================================
+     GPS
+     ===================================================== */
+
+  function requestGps() {
+
+    document.getElementById(
+      'locationCard'
+    ).classList.remove(
+      'hidden'
+    );
+
+
+    setGpsStatus(
+      'Requesting GPS...',
+      false
+    );
+
+
+    if (
+      !navigator.geolocation
+    ) {
+
+      showResult(
+        false,
+        'GPS Not Supported',
+        'This device/browser does not support GPS location.'
+      );
+
+      return;
+
+    }
+
+
+    navigator.geolocation.getCurrentPosition(
+
+      function(position) {
+
+        latitude =
+          position.coords.latitude;
+
+        longitude =
+          position.coords.longitude;
+
+        gpsAccuracy =
+          position.coords.accuracy;
+
+
+        document.getElementById(
+          'latitude'
+        ).textContent =
+          latitude.toFixed(7);
+
+
+        document.getElementById(
+          'longitude'
+        ).textContent =
+          longitude.toFixed(7);
+
+
+        document.getElementById(
+          'accuracy'
+        ).textContent =
+          Math.round(
+            gpsAccuracy
+          ) + ' m';
+
+
+        setGpsStatus(
+          'Location acquired',
+          true
+        );
+
+
+        submitAttendance();
+
+      },
+
+      function(error) {
+
+        console.error(
+          error
+        );
+
+
+        setGpsStatus(
+          'Failed',
+          false
+        );
+
+
+        showResult(
+          false,
+          'Location Required',
+          'Location permission is required to record attendance.'
+        );
+
+      },
+
+      {
+        enableHighAccuracy:
+          true,
+
+        timeout:
+          15000,
+
+        maximumAge:
+          0
+
+      }
+
+    );
+
+  }
+
+
+  /* =====================================================
+     SUBMIT
+     ===================================================== */
+
+  function submitAttendance() {
+
+    if (!googleIdToken) {
+
+      showResult(
+        false,
+        'Authentication Required',
+        'Please sign in with Google.'
+      );
+
+      return;
+    }
+
+
+    if (!qrToken) {
+
+      showResult(
+        false,
+        'QR Code Missing',
+        'Please scan the room QR code again.'
+      );
+
+      return;
+    }
+
+
+    document.getElementById(
+      'loading'
+    ).style.display =
+      'block';
+
+
+    /*
+     * The actual Apps Script communication layer
+     * will be connected in the next step.
+     */
+
+    const payload = {
+
+      qrToken:
+        qrToken,
+
+      googleIdToken:
+        googleIdToken,
+
+      latitude:
+        latitude,
+
+      longitude:
+        longitude,
+
+      gpsAccuracy:
+        gpsAccuracy
+
+    };
+
+
+    sendToBackend(
+      payload
+    );
+
+  }
+
+
+  /* =====================================================
+     BACKEND BRIDGE
+     ===================================================== */
+
+  function sendToBackend(
+    payload
+  ) {
+
+    /*
+     * TEMPORARY PLACEHOLDER.
+     *
+     * We will connect this to the Apps Script
+     * backend bridge after updating Code.gs.
+     */
+
+    console.log(
+      'Attendance payload ready:',
+      payload
+    );
+
+
+    /*
+     * Do NOT record attendance yet.
+     *
+     * This prevents us from accidentally
+     * sending data through an incomplete
+     * cross-origin architecture.
+     */
+
+    document.getElementById(
+      'loading'
+    ).style.display =
+      'none';
+
+
+    showResult(
+
+      false,
+
+      'Backend Connection Pending',
+
+      'The camera, Google authentication and GPS are working. The Apps Script backend bridge still needs to be connected.'
+
+    );
+
+  }
+
+
+  /* =====================================================
+     RESET
+     ===================================================== */
+
+  async function resetScanner() {
+
+    document.getElementById(
+      'result'
+    ).style.display =
+      'none';
+
+
+    document.getElementById(
+      'locationCard'
+    ).classList.add(
+      'hidden'
+    );
+
+
+    latitude = null;
+    longitude = null;
+    gpsAccuracy = null;
+    qrToken = null;
+    scanProcessed = false;
+
+
+    document.getElementById(
+      'latitude'
+    ).textContent =
+      '—';
+
+
+    document.getElementById(
+      'longitude'
+    ).textContent =
+      '—';
+
+
+    document.getElementById(
+      'accuracy'
+    ).textContent =
+      '—';
+
+
+    document.getElementById(
+      'scannerCard'
+    ).classList.remove(
+      'hidden'
+    );
+
+
+    await startScanner();
+
+  }
+
+
+  /* =====================================================
+     UI HELPERS
+     ===================================================== */
+
+  function setAuthStatus(
+    message,
+    type
+  ) {
+
+    const el =
+      document.getElementById(
+        'authStatus'
+      );
+
+    el.textContent =
+      message;
+
+    el.className =
+      'status ' + type;
+
+  }
+
+
+  function setScanStatus(
+    message,
+    type
+  ) {
+
+    const el =
+      document.getElementById(
+        'scanStatus'
+      );
+
+    el.textContent =
+      message;
+
+    el.className =
+      'status ' + type;
+
+  }
+
+
+  function setGpsStatus(
+    message,
+    good
+  ) {
+
+    const el =
+      document.getElementById(
+        'gpsStatus'
+      );
+
+    el.textContent =
+      message;
+
+    el.style.color =
+      good
+        ? '#137333'
+        : '#5f6368';
+
+  }
+
+
+  function showResult(
+    success,
+    title,
+    details
+  ) {
+
+    document.getElementById(
+      'loading'
+    ).style.display =
+      'none';
+
+
+    const result =
+      document.getElementById(
+        'result'
+      );
+
+
+    document.getElementById(
+      'resultIcon'
+    ).textContent =
+      success
+        ? '✓'
+        : '✕';
+
+
+    document.getElementById(
+      'resultTitle'
+    ).textContent =
+      title;
+
+
+    document.getElementById(
+      'resultDetails'
+    ).textContent =
+      details;
+
+
+    result.style.display =
+      'block';
+
+  }
+
+</script>
+
+</body>
+</html>
