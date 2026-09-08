@@ -538,6 +538,10 @@ let pendingBackendPayload = null;
 
 let backendBridgeChannelId = null;
 
+let backendBridgeTimeoutId = null;
+
+const BACKEND_TIMEOUT_MS = 20000;
+
 const BRIDGE_PARENT_ORIGIN =
   'https://lifechallenger.github.io';
 
@@ -577,6 +581,9 @@ const BRIDGE_PARENT_ORIGIN =
     }
 
     if (event.data.type === 'ROOM_ATTENDANCE_RESULT') {
+
+      clearBackendTimeout();
+
       document.getElementById('loading').style.display = 'none';
 
       const success = !!event.data.success;
@@ -597,28 +604,63 @@ const BRIDGE_PARENT_ORIGIN =
         details
       );
 
-      if (scannerRunning && scanner) {
-        try {
-          scanner.stop();
-        } catch (error) {
-          console.warn('Scanner stop warning:', error);
-        }
-        scannerRunning = false;
-      }
-
-      if (backendBridgeFrame) {
-        try {
-          backendBridgeFrame.remove();
-        } catch (error) {
-          console.warn('Bridge iframe removal warning:', error);
-        }
-      }
-
-      backendBridgeFrame = null;
-      backendBridgeChannelId = null;
-      pendingBackendPayload = null;
+      cleanupBackendBridge();
     }
   });
+
+
+  /* =====================================================
+     BACKEND TIMEOUT HANDLING
+     ===================================================== */
+
+  function clearBackendTimeout() {
+    if (backendBridgeTimeoutId) {
+      clearTimeout(backendBridgeTimeoutId);
+      backendBridgeTimeoutId = null;
+    }
+  }
+
+  function cleanupBackendBridge() {
+    if (scannerRunning && scanner) {
+      try {
+        scanner.stop();
+      } catch (error) {
+        console.warn('Scanner stop warning:', error);
+      }
+      scannerRunning = false;
+    }
+
+    if (backendBridgeFrame) {
+      try {
+        backendBridgeFrame.remove();
+      } catch (error) {
+        console.warn('Bridge iframe removal warning:', error);
+      }
+    }
+
+    backendBridgeFrame = null;
+    backendBridgeChannelId = null;
+    pendingBackendPayload = null;
+  }
+
+  function handleBackendTimeout() {
+    backendBridgeTimeoutId = null;
+
+    console.warn(
+      'Timed out waiting for ROOM_ATTENDANCE_RESULT from backend bridge.'
+    );
+
+    document.getElementById('loading').style.display = 'none';
+
+    showResult(
+      false,
+      'Verification Timed Out',
+      'The attendance backend did not respond in time. ' +
+      'Please check your internet connection and try scanning again.'
+    );
+
+    cleanupBackendBridge();
+  }
 
 /* =====================================================
      GOOGLE SIGN IN
@@ -1622,6 +1664,13 @@ const BRIDGE_PARENT_ORIGIN =
     setScanStatus(
       'Verifying attendance...',
       'info'
+    );
+
+    clearBackendTimeout();
+
+    backendBridgeTimeoutId = setTimeout(
+      handleBackendTimeout,
+      BACKEND_TIMEOUT_MS
     );
   }
 
