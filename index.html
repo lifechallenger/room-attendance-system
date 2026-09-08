@@ -488,8 +488,8 @@
    * after the backend communication layer is added.
    */
 
-  const APPS_SCRIPT_URL =
-    'PASTE_APPS_SCRIPT_WEB_APP_URL_HERE';
+const APPS_SCRIPT_URL =
+  'https://script.google.com/macros/s/AKfycbxlIchgA9XfdjG-F69Uh5MP3NlnvJ3IKnaqfA-BmPsSsh5a4_YW6lysWj3PzIH6R4kj/exec';
 
 
   /*
@@ -524,6 +524,12 @@
 
   let scanProcessed = false;
 
+  let backendBridgeWindow = null;
+
+let backendBridgeReady = false;
+
+let pendingBackendPayload = null;
+
 
   /* =====================================================
      INITIALIZATION
@@ -533,6 +539,205 @@
     'load',
     initializeGoogle
   );
+  /*
+ * =====================================================
+ * APPS SCRIPT BRIDGE MESSAGE LISTENER
+ * =====================================================
+ */
+
+window.addEventListener(
+  'message',
+  function(event) {
+
+    if (!event.data) {
+      return;
+    }
+
+
+    /*
+     * Apps Script bridge is ready.
+     */
+    if (
+      event.data.type ===
+      'ROOM_ATTENDANCE_BRIDGE_READY'
+    ) {
+
+      backendBridgeReady = true;
+
+
+      setScanStatus(
+        'Attendance backend connected.',
+        'success'
+      );
+
+
+      /*
+       * If attendance data was already waiting,
+       * send it now.
+       */
+      if (
+        pendingBackendPayload &&
+        backendBridgeWindow &&
+        !backendBridgeWindow.closed
+      ) {
+
+        backendBridgeWindow.postMessage(
+          {
+            type:
+              'ROOM_ATTENDANCE_SUBMIT',
+
+            payload:
+              pendingBackendPayload
+          },
+          '*'
+        );
+
+
+        pendingBackendPayload =
+          null;
+
+      }
+
+
+      return;
+    }
+
+
+    /*
+     * Attendance result received.
+     */
+    if (
+      event.data.type ===
+      'ROOM_ATTENDANCE_RESULT'
+    ) {
+
+      document.getElementById(
+        'loading'
+      ).style.display =
+        'none';
+
+
+      const success =
+        event.data.success;
+
+
+      const result =
+        event.data.result;
+
+
+      let details =
+        '';
+
+
+      /*
+       * recordAttendance() returns an object.
+       */
+      if (
+        result &&
+        typeof result === 'object'
+      ) {
+
+        if (
+          result.message
+        ) {
+
+          details =
+            result.message;
+
+        } else {
+
+          details =
+            JSON.stringify(
+              result,
+              null,
+              2
+            );
+
+        }
+
+      } else {
+
+        details =
+          String(
+            result || ''
+          );
+
+      }
+
+
+      showResult(
+        success,
+        success
+          ? 'Attendance Recorded'
+          : 'Attendance Rejected',
+        details
+      );
+
+
+      /*
+       * Stop scanner.
+       */
+      if (
+        scannerRunning &&
+        scanner
+      ) {
+
+        try {
+
+          scanner.stop();
+
+        } catch (error) {
+
+          console.warn(
+            'Scanner stop warning:',
+            error
+          );
+
+        }
+
+        scannerRunning =
+          false;
+
+      }
+
+
+      /*
+       * Close bridge window.
+       */
+      if (
+        backendBridgeWindow &&
+        !backendBridgeWindow.closed
+      ) {
+
+        try {
+
+          backendBridgeWindow.close();
+
+        } catch (error) {
+
+          console.warn(
+            'Bridge close warning:',
+            error
+          );
+
+        }
+
+      }
+
+
+      backendBridgeWindow =
+        null;
+
+      backendBridgeReady =
+        false;
+
+      pendingBackendPayload =
+        null;
+
+    }
+
+  }
+);
 
 
   /* =====================================================
@@ -750,6 +955,7 @@
   if (scannerRunning) {
     return;
   }
+   openBackendBridge();
 
   scanProcessed = false;
   qrToken = null;
@@ -1437,49 +1643,156 @@
   /* =====================================================
      BACKEND BRIDGE
      ===================================================== */
+/* =====================================================
+   APPS SCRIPT BACKEND BRIDGE
+   ===================================================== */
 
-  function sendToBackend(
-    payload
+function openBackendBridge() {
+
+  /*
+   * Reuse an existing bridge window.
+   */
+  if (
+    backendBridgeWindow &&
+    !backendBridgeWindow.closed
   ) {
 
-    /*
-     * TEMPORARY PLACEHOLDER.
-     *
-     * We will connect this to the Apps Script
-     * backend bridge after updating Code.gs.
-     */
-
-    console.log(
-      'Attendance payload ready:',
-      payload
-    );
-
-
-    /*
-     * Do NOT record attendance yet.
-     *
-     * This prevents us from accidentally
-     * sending data through an incomplete
-     * cross-origin architecture.
-     */
-
-    document.getElementById(
-      'loading'
-    ).style.display =
-      'none';
-
-
-    showResult(
-
-      false,
-
-      'Backend Connection Pending',
-
-      'The camera, Google authentication and GPS are working. The Apps Script backend bridge still needs to be connected.'
-
-    );
+    return true;
 
   }
+
+
+  backendBridgeReady =
+    false;
+
+
+  const bridgeUrl =
+    APPS_SCRIPT_URL +
+    '?page=bridge';
+
+
+  /*
+   * Open the Apps Script bridge.
+   *
+   * This function is called while the user
+   * is interacting with the scanner, allowing
+   * the browser to treat the popup as user-initiated.
+   */
+  backendBridgeWindow =
+    window.open(
+      bridgeUrl,
+      '_blank'
+    );
+
+
+  if (
+    !backendBridgeWindow
+  ) {
+
+    setScanStatus(
+      'Please allow pop-ups for this site so attendance can connect.',
+      'error'
+    );
+
+
+    return false;
+
+  }
+
+
+  setScanStatus(
+    'Connecting to attendance backend...',
+    'info'
+  );
+
+
+  return true;
+
+}
+
+
+function sendToBackend(
+  payload
+) {
+
+  console.log(
+    'Attendance payload:',
+    payload
+  );
+
+
+  /*
+   * Bridge is already ready.
+   */
+  if (
+    backendBridgeWindow &&
+    !backendBridgeWindow.closed &&
+    backendBridgeReady
+  ) {
+
+    backendBridgeWindow.postMessage(
+      {
+        type:
+          'ROOM_ATTENDANCE_SUBMIT',
+
+        payload:
+          payload
+      },
+      '*'
+    );
+
+
+    setScanStatus(
+      'Submitting attendance...',
+      'info'
+    );
+
+
+    return;
+
+  }
+
+
+  /*
+   * Bridge isn't ready yet.
+   * Hold the payload until it announces
+   * that it is ready.
+   */
+  pendingBackendPayload =
+    payload;
+
+
+  /*
+   * Open the bridge if necessary.
+   */
+  if (
+    !backendBridgeWindow ||
+    backendBridgeWindow.closed
+  ) {
+
+    const opened =
+      openBackendBridge();
+
+
+    if (!opened) {
+
+      document.getElementById(
+        'loading'
+      ).style.display =
+        'none';
+
+
+      showResult(
+        false,
+        'Backend Connection Failed',
+        'The Apps Script backend window could not be opened. Please allow pop-ups and try again.'
+      );
+
+    }
+
+  }
+
+}
 
 
   /* =====================================================
