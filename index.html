@@ -130,14 +130,20 @@
 
     #reader {
       width: 100%;
+      height: 360px;
+      min-height: 260px;
       overflow: hidden;
       border-radius: 14px;
       background: #000;
+      position: relative;
     }
 
     #reader video {
       width: 100% !important;
-      height: auto !important;
+      height: 100% !important;
+      max-width: none !important;
+      object-fit: cover !important;
+      display: block !important;
     }
 
     .placeholder {
@@ -530,6 +536,8 @@ let backendBridgeReady = false;
 
 let pendingBackendPayload = null;
 
+let backendBridgeChannelId = null;
+
 const BRIDGE_PARENT_ORIGIN =
   'https://lifechallenger.github.io';
 
@@ -542,247 +550,77 @@ const BRIDGE_PARENT_ORIGIN =
     'load',
     initializeGoogle
   );
-  /*
- * =====================================================
- * APPS SCRIPT BRIDGE MESSAGE LISTENER
- * =====================================================
- */
+  /* =====================================================
+     APPS SCRIPT BRIDGE MESSAGE LISTENER
+     ===================================================== */
 
-window.addEventListener(
-  'message',
-  function(event) {
-
-    if (!event.data) {
-      return;
-    }
-
+  window.addEventListener('message', function(event) {
+    if (!event.data) return;
 
     /*
-     * ---------------------------------------------------
-     * SECURITY CHECK 1
-     * Only accept messages from our Apps Script Bridge.
-     *
-     * Apps Script web app is cross-origin, so we cannot
-     * hard-code its origin here because deployments can
-     * change. Instead we verify the message source below.
-     * ---------------------------------------------------
+     * Apps Script HTMLService is wrapped in an additional Google
+     * iframe. Therefore event.source is NOT reliably equal to the
+     * outer iframe's contentWindow. Authenticate the response with
+     * a random channel ID instead.
      */
+    const allowedOrigins = [
+      'https://script.googleusercontent.com',
+      'https://script.google.com'
+    ];
 
-    if (
-      !backendBridgeFrame ||
-      !backendBridgeFrame.contentWindow
-    ) {
+    if (!allowedOrigins.includes(event.origin)) {
       return;
     }
 
-
-    if (
-      event.source !==
-      backendBridgeFrame.contentWindow
-    ) {
+    if (event.data.channelId !== backendBridgeChannelId) {
       return;
     }
 
+    if (event.data.type === 'ROOM_ATTENDANCE_RESULT') {
+      document.getElementById('loading').style.display = 'none';
 
-    /*
-     * ---------------------------------------------------
-     * BRIDGE READY
-     * ---------------------------------------------------
-     */
+      const success = !!event.data.success;
+      const result = event.data.result;
+      let details = '';
 
-    if (
-      event.data.type ===
-      'ROOM_ATTENDANCE_BRIDGE_READY'
-    ) {
-
-      backendBridgeReady = true;
-
-
-      setScanStatus(
-        'Attendance backend connected.',
-        'success'
-      );
-
-
-      /*
-       * If attendance data was already waiting,
-       * send it now.
-       */
-
-      if (
-        pendingBackendPayload &&
-        backendBridgeFrame &&
-        backendBridgeFrame.contentWindow
-      ) {
-
-        backendBridgeFrame.contentWindow.postMessage(
-          {
-            type:
-              'ROOM_ATTENDANCE_SUBMIT',
-
-            payload:
-              pendingBackendPayload
-          },
-
-          '*'
-        );
-
-
-        pendingBackendPayload =
-          null;
-
-      }
-
-
-      return;
-    }
-
-
-    /*
-     * ---------------------------------------------------
-     * ATTENDANCE RESULT
-     * ---------------------------------------------------
-     */
-
-    if (
-      event.data.type ===
-      'ROOM_ATTENDANCE_RESULT'
-    ) {
-
-      document.getElementById(
-        'loading'
-      ).style.display =
-        'none';
-
-
-      const success =
-        event.data.success;
-
-
-      const result =
-        event.data.result;
-
-
-      let details =
-        '';
-
-
-      /*
-       * recordAttendance() returns an object.
-       */
-
-      if (
-        result &&
-        typeof result === 'object'
-      ) {
-
-        if (
-          result.message
-        ) {
-
-          details =
-            result.message;
-
-        } else {
-
-          details =
-            JSON.stringify(
-              result,
-              null,
-              2
-            );
-
-        }
-
+      if (result && typeof result === 'object') {
+        details = result.message
+          ? result.message
+          : JSON.stringify(result, null, 2);
       } else {
-
-        details =
-          String(
-            result || ''
-          );
-
+        details = String(result || '');
       }
-
 
       showResult(
         success,
-
-        success
-          ? 'Attendance Recorded'
-          : 'Attendance Rejected',
-
+        success ? 'Attendance Recorded' : 'Attendance Rejected',
         details
       );
 
-
-      /*
-       * Stop scanner.
-       */
-
-      if (
-        scannerRunning &&
-        scanner
-      ) {
-
+      if (scannerRunning && scanner) {
         try {
-
           scanner.stop();
-
         } catch (error) {
-
-          console.warn(
-            'Scanner stop warning:',
-            error
-          );
-
+          console.warn('Scanner stop warning:', error);
         }
-
-        scannerRunning =
-          false;
-
+        scannerRunning = false;
       }
-
-
-      /*
-       * Remove the hidden bridge iframe.
-       */
 
       if (backendBridgeFrame) {
-
         try {
-
           backendBridgeFrame.remove();
-
         } catch (error) {
-
-          console.warn(
-            'Bridge iframe removal warning:',
-            error
-          );
-
+          console.warn('Bridge iframe removal warning:', error);
         }
-
       }
 
-
-      backendBridgeFrame =
-        null;
-
-
-      backendBridgeReady =
-        false;
-
-
-      pendingBackendPayload =
-        null;
-
+      backendBridgeFrame = null;
+      backendBridgeChannelId = null;
+      pendingBackendPayload = null;
     }
+  });
 
-  }
-);
-
-
-  /* =====================================================
+/* =====================================================
      GOOGLE SIGN IN
      ===================================================== */
 
@@ -1683,200 +1521,109 @@ window.addEventListener(
 
 
   /* =====================================================
-     BACKEND BRIDGE
+     APPS SCRIPT BACKEND BRIDGE
      ===================================================== */
-/* =====================================================
-   APPS SCRIPT BACKEND BRIDGE
-   ===================================================== */
 
-function openBackendBridge() {
+  function makeChannelId() {
+    if (window.crypto && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
 
-  /*
-   * Reuse an existing bridge iframe.
-   */
-
-  if (
-    backendBridgeFrame &&
-    backendBridgeFrame.contentWindow
-  ) {
-
-    return true;
-
+    return 'ch_' + Date.now() + '_' +
+      Math.random().toString(36).slice(2) + '_' +
+      Math.random().toString(36).slice(2);
   }
 
+  function encodeBridgePayload(value) {
+    const bytes = new TextEncoder().encode(JSON.stringify(value));
+    let binary = '';
 
-  backendBridgeReady =
-    false;
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      binary += String.fromCharCode(
+        ...bytes.subarray(i, i + 0x8000)
+      );
+    }
 
+    return btoa(binary)
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/g, '');
+  }
 
-  const bridgeUrl =
-    APPS_SCRIPT_URL +
-    '?page=bridge';
+  function openBackendBridge() {
+    if (backendBridgeFrame) {
+      return true;
+    }
 
+    backendBridgeChannelId = makeChannelId();
+    backendBridgeReady = false;
 
-  /*
-   * Create hidden iframe.
-   *
-   * The iframe hosts the Apps Script Bridge.
-   * Camera and GPS remain on the GitHub page.
-   */
+    const iframe = document.createElement('iframe');
 
-  const iframe =
-    document.createElement('iframe');
+    iframe.src = APPS_SCRIPT_URL + '?page=bridge';
+    iframe.title = 'Room Attendance Backend';
 
+    iframe.style.position = 'fixed';
+    iframe.style.width = '1px';
+    iframe.style.height = '1px';
+    iframe.style.border = '0';
+    iframe.style.opacity = '0';
+    iframe.style.pointerEvents = 'none';
+    iframe.style.left = '-10px';
+    iframe.style.top = '-10px';
 
-  iframe.src =
-    bridgeUrl;
-
-
-  iframe.title =
-    'Room Attendance Backend';
-
-
-  /*
-   * Keep the iframe effectively invisible while
-   * allowing the Apps Script page to operate normally.
-   */
-
-  iframe.style.position =
-    'fixed';
-
-  iframe.style.width =
-    '1px';
-
-  iframe.style.height =
-    '1px';
-
-  iframe.style.border =
-    '0';
-
-  iframe.style.opacity =
-    '0';
-
-  iframe.style.pointerEvents =
-    'none';
-
-  iframe.style.left =
-    '-10px';
-
-  iframe.style.top =
-    '-10px';
-
-
-  /*
-   * Store reference before adding iframe.
-   * This is important because the Bridge can send
-   * ROOM_ATTENDANCE_BRIDGE_READY very quickly.
-   */
-
-  backendBridgeFrame =
-    iframe;
-
-
-  document.body.appendChild(
-    iframe
-  );
-
-
-  setScanStatus(
-    'Connecting to attendance backend...',
-    'info'
-  );
-
-
-  return true;
-}
-
-
-
-function sendToBackend(
-  payload
-) {
-
-  console.log(
-    'Attendance payload:',
-    payload
-  );
-
-
-  /*
-   * Bridge is already ready.
-   */
-
-  if (
-    backendBridgeFrame &&
-    backendBridgeFrame.contentWindow &&
-    backendBridgeReady
-  ) {
-
-    backendBridgeFrame.contentWindow.postMessage(
-      {
-        type:
-          'ROOM_ATTENDANCE_SUBMIT',
-
-        payload:
-          payload
-      },
-
-      '*'
-    );
-
+    backendBridgeFrame = iframe;
+    document.body.appendChild(iframe);
 
     setScanStatus(
-      'Submitting attendance...',
+      'Attendance backend ready for submission.',
       'info'
     );
 
-
-    return;
-
+    return true;
   }
 
+  function sendToBackend(payload) {
+    console.log('Attendance payload:', payload);
 
-  /*
-   * Bridge isn't ready yet.
-   *
-   * Hold the payload until the Bridge announces
-   * that it is ready.
-   */
+    pendingBackendPayload = payload;
 
-  pendingBackendPayload =
-    payload;
-
-
-  /*
-   * Open/create the bridge if necessary.
-   */
-
-  if (
-    !backendBridgeFrame ||
-    !backendBridgeFrame.contentWindow
-  ) {
-
-    const opened =
+    if (!backendBridgeFrame) {
       openBackendBridge();
-
-
-    if (!opened) {
-
-      document.getElementById(
-        'loading'
-      ).style.display =
-        'none';
-
-
-      showResult(
-        false,
-        'Backend Connection Failed',
-        'The Apps Script backend bridge could not be created. Please refresh the page and try again.'
-      );
-
     }
 
+    /*
+     * IMPORTANT:
+     * Apps Script HTMLService is nested inside Google's iframe wrapper.
+     * A normal postMessage TO the outer iframe cannot reach the inner
+     * Apps Script page. Therefore the request is passed through the URL
+     * fragment. The fragment is read only by the Bridge page and is not
+     * sent to Google's server.
+     */
+    if (!backendBridgeChannelId) {
+      backendBridgeChannelId = makeChannelId();
+    }
+
+    const bridgePayload = {
+      channelId: backendBridgeChannelId,
+      payload: payload
+    };
+
+    const encoded = encodeBridgePayload(bridgePayload);
+    const requestId = Date.now() + '_' + Math.random().toString(36).slice(2);
+
+    backendBridgeFrame.src =
+      APPS_SCRIPT_URL +
+      '?page=bridge&request=' +
+      encodeURIComponent(requestId) +
+      '#data=' +
+      encoded;
+
+    setScanStatus(
+      'Verifying attendance...',
+      'info'
+    );
   }
-
-}
-
 
   /* =====================================================
      RESET
