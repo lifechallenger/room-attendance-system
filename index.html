@@ -943,14 +943,6 @@
 
     </button>
 
-    <button id="assignmentButton"
-            class="secondary"
-            onclick="startAssignmentScanner()">
-
-      Confirm Room Assignment
-
-    </button>
-
     <button id="stopButton"
             class="secondary hidden"
             onclick="stopScanner()">
@@ -1547,8 +1539,9 @@ const APPS_SCRIPT_URL =
   let scannerMode = 'attendance';
 
   // Universal accommodation-registration QR deep link.
-  // Scanning the printed QR with the phone camera opens PG Attendance
-  // directly in room-assignment registration mode.
+  // Room assignment registration is intentionally NOT exposed as a
+  // home-screen button. The registration dialog is entered only through
+  // the dedicated QR deep link (?action=room-assignment).
   let roomAssignmentDeepLinkRequested = false;
   try {
     roomAssignmentDeepLinkRequested =
@@ -5560,12 +5553,6 @@ const BACKEND_TIMEOUT_MS = 20000;
       'hidden'
     );
 
-    document.getElementById(
-      'assignmentButton'
-    ).classList.remove(
-      'hidden'
-    );
-
     scannerMode = 'attendance';
 
     document.getElementById(
@@ -5698,10 +5685,9 @@ const BACKEND_TIMEOUT_MS = 20000;
      ===================================================== */
 
   function setRoomAssignmentButtonVisibility_(registered) {
+    // Room assignment is QR-entry only; there is deliberately no home-screen
+    // button to show/hide. Keep the registration state for deep-link guards.
     roomAssignmentRegistered = !!registered;
-    const button = document.getElementById('assignmentButton');
-    if (!button) return;
-    button.classList.toggle('hidden', roomAssignmentRegistered);
   }
 
 
