@@ -943,6 +943,14 @@
 
     </button>
 
+    <button id="assignmentButton"
+            class="secondary"
+            onclick="startAssignmentScanner()">
+
+      Confirm Room Assignment
+
+    </button>
+
     <button id="stopButton"
             class="secondary hidden"
             onclick="stopScanner()">
@@ -1419,6 +1427,52 @@
 
 
 <!-- =====================================================
+     ROOM ASSIGNMENT REGISTRATION MODAL
+     ===================================================== -->
+<div id="roomAssignmentModal"
+     class="modal-backdrop"
+     onclick="backdropClose(event,'roomAssignmentModal')">
+
+  <div class="self-modal">
+
+    <div class="modal-header">
+      <h2 class="modal-title">Room Assignment Registration</h2>
+      <button class="modal-close" type="button"
+              onclick="closeModal('roomAssignmentModal')">&times;</button>
+    </div>
+
+    <div class="confirmation-box">
+      You are signed in with <b id="assignmentSignedInEmail">your Google account</b>.<br>
+      Enter your User ID and select the room actually assigned to you.
+      Your Attendance Not Marked penalty eligibility starts from the <b>next calendar day</b>.
+    </div>
+
+    <div class="form-group" style="margin-top:14px;">
+      <label class="form-label" for="assignmentUserId">User ID</label>
+      <input type="text" id="assignmentUserId" class="form-control"
+             autocomplete="off" placeholder="Enter your User ID">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="assignmentRoomId">Assigned room</label>
+      <select id="assignmentRoomId" class="form-control">
+        <option value="">Loading rooms&hellip;</option>
+      </select>
+      <div class="form-hint">Select the room you have actually been assigned. This registration is recorded against your signed-in Gmail account.</div>
+    </div>
+
+    <div id="assignmentMessage" class="form-message"></div>
+
+    <div class="modal-actions">
+      <button class="secondary" type="button" onclick="closeModal('roomAssignmentModal')">Cancel</button>
+      <button id="assignmentSubmitButton" class="primary" type="button" onclick="submitRoomAssignmentRegistration()">Register Room</button>
+    </div>
+
+  </div>
+</div>
+
+
+<!-- =====================================================
      RULES / INFO MODAL
      ===================================================== -->
 <div id="infoModal"
@@ -1489,6 +1543,19 @@ const APPS_SCRIPT_URL =
   let gpsAccuracy = null;
 
   let scanProcessed = false;
+
+  let scannerMode = 'attendance';
+
+  // Universal accommodation-registration QR deep link.
+  // Scanning the printed QR with the phone camera opens PG Attendance
+  // directly in room-assignment registration mode.
+  let roomAssignmentDeepLinkRequested = false;
+  try {
+    roomAssignmentDeepLinkRequested =
+      new URLSearchParams(window.location.search).get('action') === 'room-assignment';
+  } catch (e) {
+    roomAssignmentDeepLinkRequested = false;
+  }
 
  let backendBridgeTimeoutId = null;
 
@@ -1711,6 +1778,14 @@ const BACKEND_TIMEOUT_MS = 20000;
 
     loadSelfServiceBootstrap();
     loadEmployeeSummaryOnly();
+
+    // QR deep link: after Gmail authentication, open the room-assignment
+    // registration form automatically instead of requiring another tap.
+    if (roomAssignmentDeepLinkRequested) {
+      setTimeout(function() {
+        openRoomAssignmentRegistration();
+      }, 150);
+    }
 
   }
 
@@ -4262,7 +4337,8 @@ const BACKEND_TIMEOUT_MS = 20000;
       'infoModal',
       'leaveDetailsModal',
       'resignationHistoryModal',
-      'longLeaveModal'
+      'longLeaveModal',
+      'roomAssignmentModal'
     ].forEach(
       function(id) {
         closeModal(id);
@@ -4920,7 +4996,16 @@ const BACKEND_TIMEOUT_MS = 20000;
      CAMERA
      ===================================================== */
 
+ function startAssignmentScanner() {
+   scannerMode = 'assignment';
+   startScanner();
+ }
+
  async function startScanner() {
+
+  if (scannerMode !== 'assignment') {
+    scannerMode = 'attendance';
+  }
 
   if (!googleIdToken) {
     setScanStatus(
@@ -5165,7 +5250,9 @@ const BACKEND_TIMEOUT_MS = 20000;
 
 
     setScanStatus(
-      'Camera active. Point it at the room QR code.',
+      scannerMode === 'assignment'
+        ? 'Camera active. Scan the room assignment QR code.'
+        : 'Camera active. Point it at the room attendance QR code.',
       'info'
     );
 
@@ -5305,36 +5392,62 @@ const BACKEND_TIMEOUT_MS = 20000;
 
     scanProcessed = true;
 
+    const rawQr = String(decodedText || '').trim();
 
-    qrToken =
-      extractQrToken(
-        decodedText
-      );
+    // Also support the universal URL QR if it is scanned from the
+    // in-app camera rather than the phone's normal camera.
+    try {
+      const scannedUrl = new URL(rawQr);
+      if (scannedUrl.origin === window.location.origin &&
+          scannedUrl.searchParams.get('action') === 'room-assignment') {
+        setScanStatus('Room assignment registration QR detected.', 'success');
+        stopScanner().finally(function() {
+          roomAssignmentDeepLinkRequested = true;
+          openRoomAssignmentRegistration();
+        });
+        return;
+      }
+    } catch (e) {
+      // Not a URL; continue with normal QR handling.
+    }
 
+    if (rawQr === 'ROOM_ASSIGNMENT_REGISTRATION|PG_ATTENDANCE_V1') {
+      if (scannerMode !== 'assignment') {
+        scanProcessed = false;
+        setScanStatus('This is the Room Assignment Registration QR. Use Confirm Room Assignment.', 'error');
+        return;
+      }
 
-    if (!qrToken) {
-
-      scanProcessed = false;
-
-      setScanStatus(
-        'Invalid attendance QR code.',
-        'error'
-      );
-
+      setScanStatus('Registration QR detected. Select your assigned room...', 'success');
+      stopScanner().finally(function() {
+        openRoomAssignmentRegistration();
+      });
       return;
     }
 
+    if (rawQr.indexOf('ROOM_ASSIGNMENT|') === 0) {
+      scanProcessed = false;
+      setScanStatus('Room-specific assignment QR codes are no longer used. Please scan the single Room Assignment Registration QR.', 'error');
+      return;
+    }
 
-    setScanStatus(
-      'QR detected. Obtaining GPS location...',
-      'success'
-    );
+    if (scannerMode === 'assignment') {
+      scanProcessed = false;
+      setScanStatus('That is an attendance QR. Please scan the dedicated room assignment QR.', 'error');
+      return;
+    }
 
+    qrToken = extractQrToken(decodedText);
 
-    stopScanner()
-      .finally(
-        requestGps
-      );
+    if (!qrToken) {
+      scanProcessed = false;
+      setScanStatus('Invalid attendance QR code.', 'error');
+      return;
+    }
+
+    setScanStatus('QR detected. Obtaining GPS location...', 'success');
+
+    stopScanner().finally(requestGps);
 
   }
 
@@ -5438,6 +5551,13 @@ const BACKEND_TIMEOUT_MS = 20000;
       'hidden'
     );
 
+    document.getElementById(
+      'assignmentButton'
+    ).classList.remove(
+      'hidden'
+    );
+
+    scannerMode = 'attendance';
 
     document.getElementById(
       'stopButton'
@@ -5563,6 +5683,95 @@ const BACKEND_TIMEOUT_MS = 20000;
 
   }
 
+
+  /* =====================================================
+     ROOM ASSIGNMENT PROOF
+     ===================================================== */
+
+  function openRoomAssignmentRegistration() {
+    if (!googleIdToken) {
+      showResult(false, 'Authentication Required', 'Please sign in with Google.');
+      return;
+    }
+
+    var modal = document.getElementById('roomAssignmentModal');
+    var emailEl = document.getElementById('assignmentSignedInEmail');
+    var userIdEl = document.getElementById('assignmentUserId');
+    var roomEl = document.getElementById('assignmentRoomId');
+    var messageEl = document.getElementById('assignmentMessage');
+
+    if (emailEl) emailEl.textContent = document.getElementById('userEmail').textContent || 'your Google account';
+    if (userIdEl) userIdEl.value = '';
+    if (roomEl) roomEl.innerHTML = '<option value="">Loading rooms&hellip;</option>';
+    if (messageEl) messageEl.textContent = '';
+    if (modal) modal.classList.add('show');
+
+    selfServiceJsonp('getRoomAssignmentOptions')
+      .then(function(result) {
+        if (!result || !result.success) throw new Error(result && result.message ? result.message : 'Could not load rooms.');
+        roomEl.innerHTML = '<option value="">Select your assigned room</option>' +
+          (result.rooms || []).map(function(room) {
+            return '<option value="' + escapeHtml(room.roomId) + '">' + escapeHtml(room.roomName) + ' (' + escapeHtml(room.roomId) + ')</option>';
+          }).join('');
+      })
+      .catch(function(error) {
+        roomEl.innerHTML = '<option value="">Unable to load rooms</option>';
+        if (messageEl) messageEl.textContent = error && error.message ? error.message : 'Could not load rooms.';
+      });
+  }
+
+
+  function submitRoomAssignmentRegistration() {
+    if (!googleIdToken) {
+      showResult(false, 'Authentication Required', 'Please sign in with Google.');
+      return;
+    }
+
+    var typedUserId = String(document.getElementById('assignmentUserId').value || '').trim();
+    var roomId = String(document.getElementById('assignmentRoomId').value || '').trim();
+    var messageEl = document.getElementById('assignmentMessage');
+    var button = document.getElementById('assignmentSubmitButton');
+
+    if (!typedUserId) {
+      if (messageEl) messageEl.textContent = 'Please enter your User ID.';
+      return;
+    }
+    if (!roomId) {
+      if (messageEl) messageEl.textContent = 'Please select your assigned room.';
+      return;
+    }
+
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Registering&hellip;';
+    }
+    if (messageEl) messageEl.textContent = 'Recording your room assignment...';
+
+    selfServiceJsonp('recordRoomAssignment', {
+      typedUserId: typedUserId,
+      roomId: roomId
+    })
+      .then(function(result) {
+        if (result && result.success) {
+          closeModal('roomAssignmentModal');
+          scannerMode = 'attendance';
+          showResult(true, 'Room Assignment Registered',
+            'Room: ' + (result.roomName || roomId) + '. Attendance Not Marked penalty eligibility starts from ' +
+            (result.effectiveFromDate || 'the next calendar day') + '.');
+          return;
+        }
+        if (messageEl) messageEl.textContent = result && result.message ? result.message : 'Room assignment could not be registered.';
+      })
+      .catch(function(error) {
+        if (messageEl) messageEl.textContent = error && error.message ? error.message : 'Could not reach the backend.';
+      })
+      .finally(function() {
+        if (button) {
+          button.disabled = false;
+          button.textContent = 'Register Room';
+        }
+      });
+  }
 
   /* =====================================================
      SUBMIT
