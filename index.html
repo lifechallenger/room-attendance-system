@@ -1778,6 +1778,11 @@ const BACKEND_TIMEOUT_MS = 20000;
 
     loadSelfServiceBootstrap();
     loadEmployeeSummaryOnly();
+    // Preload the small active-room list in parallel so opening the room
+    // assignment form does not wait for a second round trip.
+    preloadRoomAssignmentOptions_().catch(function(error) {
+      console.warn('Room assignment options preload failed:', error);
+    });
 
     // QR deep link: after Gmail authentication, open the room-assignment
     // registration form automatically instead of requiring another tap.
@@ -1954,6 +1959,9 @@ const BACKEND_TIMEOUT_MS = 20000;
   let pendingResignation = null;
   let pendingLongLeave = null;
   let pendingLeaveProof = null;
+  let roomAssignmentRegistered = false;
+  let roomAssignmentOptions = null;
+  let roomAssignmentOptionsPromise = null;
 
   function localTodayKey() {
 
@@ -2055,6 +2063,7 @@ const BACKEND_TIMEOUT_MS = 20000;
 
         mergeSelfServiceConfig_(result);
 
+        setRoomAssignmentButtonVisibility_(result.roomAssignmentRegistered);
         selfServiceBootstrapReady = true;
 
         const tools =
@@ -5688,9 +5697,45 @@ const BACKEND_TIMEOUT_MS = 20000;
      ROOM ASSIGNMENT PROOF
      ===================================================== */
 
+  function setRoomAssignmentButtonVisibility_(registered) {
+    roomAssignmentRegistered = !!registered;
+    const button = document.getElementById('assignmentButton');
+    if (!button) return;
+    button.classList.toggle('hidden', roomAssignmentRegistered);
+  }
+
+
+  function preloadRoomAssignmentOptions_() {
+    if (!googleIdToken) return Promise.resolve(null);
+    if (roomAssignmentOptions) return Promise.resolve(roomAssignmentOptions);
+    if (roomAssignmentOptionsPromise) return roomAssignmentOptionsPromise;
+
+    roomAssignmentOptionsPromise = selfServiceJsonp('getRoomAssignmentOptions')
+      .then(function(result) {
+        if (!result || !result.success) {
+          throw new Error(result && result.message ? result.message : 'Could not load rooms.');
+        }
+        roomAssignmentOptions = result.rooms || [];
+        return roomAssignmentOptions;
+      })
+      .catch(function(error) {
+        roomAssignmentOptionsPromise = null;
+        throw error;
+      });
+
+    return roomAssignmentOptionsPromise;
+  }
+
+
   function openRoomAssignmentRegistration() {
     if (!googleIdToken) {
       showResult(false, 'Authentication Required', 'Please sign in with Google.');
+      return;
+    }
+
+    if (roomAssignmentRegistered) {
+      showResult(false, 'Room Assignment Already Registered',
+        'A room assignment is already registered for this Google account. Contact HR if your room has changed.');
       return;
     }
 
@@ -5702,20 +5747,27 @@ const BACKEND_TIMEOUT_MS = 20000;
 
     if (emailEl) emailEl.textContent = document.getElementById('userEmail').textContent || 'your Google account';
     if (userIdEl) userIdEl.value = '';
-    if (roomEl) roomEl.innerHTML = '<option value="">Loading rooms&hellip;</option>';
     if (messageEl) messageEl.textContent = '';
     if (modal) modal.classList.add('show');
 
-    selfServiceJsonp('getRoomAssignmentOptions')
-      .then(function(result) {
-        if (!result || !result.success) throw new Error(result && result.message ? result.message : 'Could not load rooms.');
-        roomEl.innerHTML = '<option value="">Select your assigned room</option>' +
-          (result.rooms || []).map(function(room) {
-            return '<option value="' + escapeHtml(room.roomId) + '">' + escapeHtml(room.roomName) + ' (' + escapeHtml(room.roomId) + ')</option>';
-          }).join('');
-      })
+    function renderRooms_(rooms) {
+      if (!roomEl) return;
+      roomEl.innerHTML = '<option value="">Select your assigned room</option>' +
+        (rooms || []).map(function(room) {
+          return '<option value="' + escapeHtml(room.roomId) + '">' + escapeHtml(room.roomName) + ' (' + escapeHtml(room.roomId) + ')</option>';
+        }).join('');
+    }
+
+    if (roomAssignmentOptions) {
+      renderRooms_(roomAssignmentOptions);
+      return;
+    }
+
+    if (roomEl) roomEl.innerHTML = '<option value="">Loading rooms&hellip;</option>';
+    preloadRoomAssignmentOptions_()
+      .then(renderRooms_)
       .catch(function(error) {
-        roomEl.innerHTML = '<option value="">Unable to load rooms</option>';
+        if (roomEl) roomEl.innerHTML = '<option value="">Unable to load rooms</option>';
         if (messageEl) messageEl.textContent = error && error.message ? error.message : 'Could not load rooms.';
       });
   }
@@ -5753,6 +5805,7 @@ const BACKEND_TIMEOUT_MS = 20000;
     })
       .then(function(result) {
         if (result && result.success) {
+          setRoomAssignmentButtonVisibility_(true);
           closeModal('roomAssignmentModal');
           scannerMode = 'attendance';
           showResult(true, 'Room Assignment Registered',
