@@ -971,6 +971,19 @@ body.adm-no-employee #weekoffInfo { display: none !important; }
 .adm-wfrow.future { background: #f8fbff; }
 .adm-wfmore { font-size: 13px; color: #5f6368; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #dadce0; }
 
+/* ---- contest a penalty (employee) ---- */
+.ct-row { border: 1px solid #e3e6ea; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; background: #fff; }
+.ct-line { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.ct-amt { font-weight: 700; }
+.ct-sub { font-size: 13px; color: #5f6368; margin-top: 2px; }
+.ct-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 700; background: #fef7e0; color: #b06000; }
+.ct-pill.ok { background: #e6f4ea; color: #188038; }
+.ct-pill.no { background: #fce8e6; color: #c5221f; }
+.ct-btn { margin-top: 8px; }
+.ct-text { width: 100%; padding: 10px; border: 1px solid #dadce0; border-radius: 8px; font: inherit; }
+.ct-label { display: block; font-weight: 600; margin: 10px 0 6px; }
+.ct-summary { background: #f1f3f4; border-radius: 8px; padding: 10px; margin-bottom: 6px; font-size: 14px; }
+.ct-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
 </style>
 </head>
 
@@ -1056,6 +1069,9 @@ body.adm-no-employee #weekoffInfo { display: none !important; }
                 aria-label="Rules and penalties">
           &#9432;
         </button>
+      </div>
+      <div class="employee-tools-row" style="margin-top:8px">
+        <button class="secondary employee-tool-btn" type="button" onclick="openContestModal()">Contest a Penalty</button>
       </div>
     </div>
 
@@ -1343,6 +1359,42 @@ body.adm-no-employee #weekoffInfo { display: none !important; }
 
     </div>
   </div>
+
+  <!-- =====================================================
+       CONTEST A PENALTY MODAL
+       ===================================================== -->
+  <div id="contestModal"
+       class="modal-backdrop"
+       onclick="backdropClose(event,'contestModal')">
+
+    <div class="self-modal">
+
+      <div class="modal-header">
+        <h2 class="modal-title">Contest a Penalty</h2>
+        <button class="modal-close" type="button"
+                onclick="closeModal('contestModal')">&times;</button>
+      </div>
+
+      <div id="contestListView">
+        <div id="contestIntro" class="detail-empty" style="text-align:left"></div>
+        <div id="contestList" class="detail-list"></div>
+      </div>
+
+      <div id="contestFormView" class="hidden">
+        <div id="contestFormSummary" class="ct-summary"></div>
+        <label class="ct-label" for="contestReason">Why should this penalty be reviewed?</label>
+        <textarea id="contestReason" class="ct-text" maxlength="500" rows="5"
+                  placeholder="Explain what happened (at least 10 characters)"></textarea>
+        <div id="contestFormMessage" class="form-message"></div>
+        <div class="ct-actions">
+          <button class="secondary" type="button" onclick="cancelContest_()">Back</button>
+          <button id="contestSendBtn" class="primary" type="button" onclick="sendContest_()">Send for review</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
 
 
   <!-- =====================================================
@@ -4533,6 +4585,7 @@ const BACKEND_TIMEOUT_MS = 20000;
       'leaveDetailsModal',
       'resignationHistoryModal',
       'longLeaveModal',
+      'contestModal',
       'roomAssignmentModal'
     ].forEach(
       function(id) {
@@ -6410,6 +6463,211 @@ const BACKEND_TIMEOUT_MS = 20000;
 
   }
 
+  /* =====================================================
+     CONTEST A PENALTY (employee)
+     ===================================================== */
+
+  let contestItems = [];
+  let contestSelected = null;
+  let contestBusy = false;
+
+  function openContestModal() {
+
+    if (!googleIdToken) return;
+
+    closeAllModals();
+
+    document.getElementById('contestModal').classList.add('show');
+
+    cancelContest_();
+    loadContestList_();
+
+  }
+
+  function loadContestList_() {
+
+    const list = document.getElementById('contestList');
+
+    list.innerHTML = '<div class="detail-empty">Loading...</div>';
+
+    selfServiceJsonp('getMyPenalties').then(function(res) {
+
+      if (!res || !res.success) {
+        throw new Error((res && res.message) || 'Could not load your penalties.');
+      }
+
+      contestItems = res.items || [];
+
+      document.getElementById('contestIntro').textContent =
+        'You can contest a penalty within ' + res.windowDays +
+        ' days of its date. Tap Contest, explain what happened, and an admin will review it.';
+
+      renderContestList_();
+
+    }).catch(function(error) {
+
+      list.innerHTML =
+        '<div class="detail-empty">' +
+        admEsc(error && error.message ? error.message : 'Could not load your penalties.') +
+        '</div>';
+
+    });
+
+  }
+
+  function renderContestList_() {
+
+    const list = document.getElementById('contestList');
+
+    if (!contestItems.length) {
+      list.innerHTML = '<div class="detail-empty">No penalties in the last 45 days.</div>';
+      return;
+    }
+
+    list.innerHTML = contestItems.map(function(item, index) {
+
+      const c = item.contest;
+      let status = '';
+
+      if (c) {
+
+        const s = c.status.toLowerCase();
+
+        if (s === 'pending') {
+          status =
+            '<span class="ct-pill">Under review</span>' +
+            '<div><button type="button" class="secondary ct-btn" onclick="withdrawContest_(' + index + ')">Withdraw</button></div>';
+        } else if (s === 'accepted') {
+          status =
+            '<span class="ct-pill ok">Accepted</span> ' +
+            admEsc(c.outcome === 'Waived' ? 'Penalty waived.' : 'Reduced to ' + admMoney(c.outcomeAmount) + '.') +
+            (c.remark ? '<div class="ct-sub">' + admEsc(c.remark) + '</div>' : '');
+        } else {
+          status =
+            '<span class="ct-pill no">Not accepted</span>' +
+            (c.remark ? '<div class="ct-sub">' + admEsc(c.remark) + '</div>' : '');
+        }
+
+      } else if (item.canContest) {
+
+        status = '<button type="button" class="secondary ct-btn" onclick="startContest_(' + index + ')">Contest</button>';
+
+      } else {
+
+        status =
+          '<div class="ct-sub">' +
+          (item.current <= 0 ? 'Already waived.' : 'The contest period has ended.') +
+          '</div>';
+
+      }
+
+      return '<div class="ct-row">' +
+        '<div class="ct-line"><b>' + admEsc(item.type) + '</b><span class="ct-amt">' +
+        (item.current === item.original ? admMoney(item.current) : '<s>' + admMoney(item.original) + '</s> ' + admMoney(item.current)) +
+        '</span></div>' +
+        '<div class="ct-sub">' + admNiceDate(item.date) + '</div>' +
+        status + '</div>';
+
+    }).join('');
+
+  }
+
+  function startContest_(index) {
+
+    const item = contestItems[index];
+    if (!item) return;
+
+    contestSelected = item;
+
+    document.getElementById('contestFormSummary').innerHTML =
+      '<b>' + admEsc(item.type) + '</b> · ' + admNiceDate(item.date) + ' · ' + admMoney(item.current);
+
+    document.getElementById('contestReason').value = '';
+    setFormMessage('contestFormMessage', '', '');
+
+    document.getElementById('contestListView').classList.add('hidden');
+    document.getElementById('contestFormView').classList.remove('hidden');
+
+  }
+
+  function cancelContest_() {
+
+    contestSelected = null;
+    contestBusy = false;
+
+    document.getElementById('contestFormView').classList.add('hidden');
+    document.getElementById('contestListView').classList.remove('hidden');
+
+  }
+
+  function sendContest_() {
+
+    if (contestBusy || !contestSelected) return;
+
+    const reason = document.getElementById('contestReason').value.trim();
+
+    if (reason.length < 10) {
+      setFormMessage('contestFormMessage', 'Please explain in at least 10 characters.', 'error');
+      return;
+    }
+
+    contestBusy = true;
+
+    const button = document.getElementById('contestSendBtn');
+    button.disabled = true;
+    setFormMessage('contestFormMessage', 'Sending...', '');
+
+    selfServiceJsonp('submitPenaltyContest', {
+      key: contestSelected.key,
+      reason: reason
+    }).then(function(res) {
+
+      if (!res || !res.success) {
+        throw new Error((res && res.message) || 'Could not send your contest.');
+      }
+
+      button.disabled = false;
+      cancelContest_();
+      loadContestList_();
+
+    }).catch(function(error) {
+
+      contestBusy = false;
+      button.disabled = false;
+
+      setFormMessage(
+        'contestFormMessage',
+        error && error.message ? error.message : 'Could not send your contest.',
+        'error'
+      );
+
+    });
+
+  }
+
+  function withdrawContest_(index) {
+
+    const item = contestItems[index];
+    if (!item || !item.contest) return;
+
+    if (!window.confirm('Withdraw this contest?')) return;
+
+    selfServiceJsonp('withdrawPenaltyContest', { contestId: item.contest.id })
+      .then(function(res) {
+
+        if (!res || !res.success) {
+          throw new Error((res && res.message) || 'Could not withdraw.');
+        }
+
+        loadContestList_();
+
+      })
+      .catch(function(error) {
+        window.alert(error && error.message ? error.message : 'Could not withdraw.');
+      });
+
+  }
+
 
   /* =====================================================
      ADMIN PORTAL
@@ -6612,7 +6870,8 @@ const BACKEND_TIMEOUT_MS = 20000;
         '<button type="button" class="adm-card adm-tap" data-goto="approvals">' +
         '<div class="adm-k">Waiting for a decision</div>' +
         '<div class="adm-sub"><b>' + o.pending.resignations + '</b> resignation' + (o.pending.resignations === 1 ? '' : 's') +
-        ' · <b>' + o.pending.longLeaves + '</b> long leave' + (o.pending.longLeaves === 1 ? '' : 's') + '</div></button>' +
+        ' · <b>' + o.pending.longLeaves + '</b> long leave' + (o.pending.longLeaves === 1 ? '' : 's') +
+        ' \u00B7 <b>' + (o.pending.contests || 0) + '</b> contest' + ((o.pending.contests || 0) === 1 ? '' : 's') + '</div></button>' +
 
         '<div class="adm-h">Find an employee</div>' +
         '<input id="admEmpQ" class="adm-input" type="search" placeholder="Name, User ID or email" autocomplete="off">' +
@@ -6738,6 +6997,13 @@ const BACKEND_TIMEOUT_MS = 20000;
       }
 
       const pillClass = p.status.toLowerCase() === 'active' ? 'green' : 'red';
+      const isActive = p.status.toLowerCase() === 'active';
+      const canWrite = !!(adm.access && adm.access.canWrite);
+      const weekoffOn = !!(adm.access && adm.access.weekoffEditEnabled);
+      const today = admDateKey(new Date());
+      const dataUser = ' data-user="' + admEsc(p.userId) + '" data-name="' + admEsc(p.name || p.userId) + '"';
+      const statusBtn = '<button type="button" class="adm-btn ' + (isActive ? 'warn' : 'ok') + (weekoffOn ? '' : ' block') + '" data-set-status="' + (isActive ? 'Inactive' : 'Active') + '"' + dataUser + ' data-hold="' + (r.manualHoldDays || 0) + '">' + (isActive ? 'Mark inactive' : 'Mark active') + '</button>';
+      const weekoffBtn = weekoffOn ? '<button type="button" class="adm-btn alt" data-set-weekoff="1"' + dataUser + ' data-current="' + admEsc(p.weekoff || '') + '">Change weekoff</button>' : '';
 
       admOpenSheet(
         '<div class="adm-line"><h3>' + admEsc(p.name || p.userId) + '</h3><button type="button" class="adm-icon-btn" data-sheet-close="1">&#10005;</button></div>' +
@@ -6750,6 +7016,8 @@ const BACKEND_TIMEOUT_MS = 20000;
         '<div class="adm-mut adm-mt">Weekoff: ' + admEsc(p.weekoff || 'none') + ' · Joined: ' + admEsc(p.joined || 'not set') +
         (p.room ? ' · Room: ' + admEsc(p.room) : '') + '</div>' +
         (r.statusNote ? '<div class="adm-mut adm-mt">Status note: ' + admEsc(r.statusNote.reason) + '</div>' : '') +
+        (r.statusNote && r.statusNote.holdUntil && r.statusNote.holdUntil >= today ? '<div class="adm-mut">Automatic status changes are paused until ' + admNiceDate(r.statusNote.holdUntil) + '.</div>' : '') +
+        (canWrite ? '<div class="adm-row2">' + statusBtn + weekoffBtn + '</div>' : '') +
 
         '<details open><summary>Penalties, last 45 days (' + r.penalties.length + ')</summary>' +
         mini(r.penalties, function(x) {
@@ -6775,6 +7043,261 @@ const BACKEND_TIMEOUT_MS = 20000;
     }
 
   }
+  /* ---------- Contests (in Approvals) ---------- */
+
+  async function admContestList() {
+
+    try {
+
+      const res = await admCall('adminListContests', { status: adm.apStatus });
+      if (adm.tab !== 'approvals') return;
+
+      const canWrite = adm.access && adm.access.canWrite;
+
+      Object.keys(admApItems).forEach(function(k) { delete admApItems[k]; });
+
+      const html = res.items.length
+        ? res.items.map(function(x) {
+
+            admApItems[x.id] = x;
+
+            const s = x.status.toLowerCase();
+            const cls = s === 'pending' ? 'amber' : (s === 'accepted' ? 'green' : 'red');
+
+            return '<div class="adm-card">' +
+              '<div class="adm-line"><button type="button" class="adm-linkish" data-emp="' + admEsc(x.userId) + '">' + admEsc(x.name || x.userId) + '</button>' +
+              '<span class="adm-pill ' + cls + '">' + admEsc(x.status) + '</span></div>' +
+              '<div class="adm-mut">' + admEsc(x.userId) + ' · sent ' + admEsc(x.submittedAt) + '</div>' +
+              '<div class="adm-mt"><b>' + admEsc(x.type) + '</b> · ' + admNiceDate(x.date) + ' · ' + admMoney(x.amount) + '</div>' +
+              '<div class="adm-mt" style="font-size:14px">“' + admEsc(x.reason) + '”</div>' +
+              (x.outcome && x.outcome !== 'None'
+                ? '<div class="adm-mut adm-mt">' + admEsc(x.outcome) + (x.outcomeAmount !== null ? ' to ' + admMoney(x.outcomeAmount) : '') + '</div>'
+                : '') +
+              (x.remark ? '<div class="adm-mut">Remark: ' + admEsc(x.remark) + (x.decidedBy ? ' (' + admEsc(x.decidedBy) + ', ' + admEsc(x.decidedAt) + ')' : '') + '</div>' : '') +
+              (canWrite && s === 'pending'
+                ? '<div class="adm-row2"><button type="button" class="adm-btn ok" data-decide="accept" data-app="' + admEsc(x.id) + '">Accept</button>' +
+                  '<button type="button" class="adm-btn warn" data-decide="reject" data-app="' + admEsc(x.id) + '">Reject</button></div>'
+                : '') +
+              '</div>';
+
+          }).join('')
+        : '<div class="adm-empty">No contests ' + (adm.apStatus === 'Pending' ? 'waiting for a decision.' : 'yet.') + '</div>';
+
+      document.getElementById('admApBox').innerHTML = html;
+
+    } catch (err) {
+      const box = document.getElementById('admApBox');
+      if (box) box.innerHTML = '<div class="adm-empty">Could not load.</div>';
+      admFail(err);
+    }
+
+  }
+
+  function admContestDecideOpen(decision, id) {
+
+    const x = admApItems[id];
+    if (!x) return;
+
+    adm.requestId = admNewId();
+
+    const accept = decision === 'accept';
+
+    admOpenSheet(
+      '<div class="adm-line"><h3>' + (accept ? 'Accept' : 'Reject') + ' this contest?</h3><button type="button" class="adm-icon-btn" data-sheet-close="1">&#10005;</button></div>' +
+      '<div class="adm-mut">' + admEsc(x.name || x.userId) + ' · ' + admEsc(x.type) + ' · ' + admNiceDate(x.date) + ' · ' + admMoney(x.amount) + '</div>' +
+      '<div class="adm-mt" style="font-size:14px">“' + admEsc(x.reason) + '”</div>' +
+      (accept
+        ? '<div class="adm-mt"><label style="display:block;padding:6px 0"><input type="radio" name="admCtMode" value="waive" checked ' +
+          'onchange="document.getElementById(\'admCtAmt\').disabled = true"> Waive fully (₹0)</label>' +
+          '<label style="display:block;padding:6px 0"><input type="radio" name="admCtMode" value="reduce" ' +
+          'onchange="document.getElementById(\'admCtAmt\').disabled = false"> Reduce to a lower amount</label>' +
+          '<input id="admCtAmt" class="adm-input" type="number" min="1" inputmode="numeric" disabled placeholder="New amount, below ' + x.amount + '"></div>'
+        : '') +
+      '<textarea id="admRemark" class="adm-textarea adm-mt" placeholder="' + (accept ? 'Remark to the employee (optional)' : 'Reason shown to the employee (required)') + '"></textarea>' +
+      '<div id="admSheetMsg" class="adm-bad adm-mt"></div>' +
+      '<div class="adm-row2"><button type="button" class="adm-btn alt" data-sheet-close="1">Cancel</button>' +
+      '<button type="button" id="admConfirmBtn" class="adm-btn ' + (accept ? 'ok' : 'warn') + '" data-confirm-contest="' + decision + '" data-app="' + admEsc(id) + '" data-max="' + x.amount + '">' +
+      (accept ? 'Accept' : 'Reject') + '</button></div>'
+    );
+
+  }
+
+  async function admContestSubmit(decision, id, maxAmount) {
+
+    if (adm.busy) return;
+
+    const remark = document.getElementById('admRemark').value.trim();
+    const msg = document.getElementById('admSheetMsg');
+
+    let mode = 'waive';
+    let amount = null;
+
+    if (decision === 'reject' && remark.length < 3) { msg.textContent = 'Please add a reason for the employee.'; return; }
+
+    if (decision === 'accept') {
+      const picked = document.querySelector('input[name="admCtMode"]:checked');
+      mode = picked ? picked.value : 'waive';
+      if (mode === 'reduce') {
+        amount = Number(document.getElementById('admCtAmt').value);
+        if (!isFinite(amount) || amount <= 0 || amount >= maxAmount) {
+          msg.textContent = 'Enter an amount above 0 and below ' + admMoney(maxAmount) + '.';
+          return;
+        }
+      }
+    }
+
+    adm.busy = true;
+    const btn = document.getElementById('admConfirmBtn');
+    btn.disabled = true;
+
+    try {
+
+      const res = await admCall('adminDecideContest', {
+        requestId: adm.requestId,
+        contestId: id,
+        decision: decision,
+        mode: mode,
+        amount: amount,
+        remark: remark
+      });
+
+      adm.requestId = null;
+      admCloseSheet();
+      admToast(res.message || 'Done.');
+      admApprovals();
+
+    } catch (err) {
+      adm.busy = false;
+      btn.disabled = false;
+      msg.textContent = err.message;
+    }
+
+  }
+
+  /* ---------- Status and weekoff changes (from the employee sheet) ---------- */
+
+  function admStatusOpen(el) {
+
+    const target = el.getAttribute('data-set-status');
+    const userId = el.getAttribute('data-user');
+    const name = el.getAttribute('data-name');
+    const hold = Number(el.getAttribute('data-hold')) || 0;
+
+    adm.requestId = admNewId();
+
+    admOpenSheet(
+      '<div class="adm-line"><h3>Mark ' + admEsc(name) + ' ' + target.toLowerCase() + '?</h3><button type="button" class="adm-icon-btn" data-sheet-close="1">&#10005;</button></div>' +
+      '<div class="adm-mut adm-mt">' +
+      (target === 'Inactive'
+        ? 'They will lose access to attendance and self-service, and will not be switched back on automatically.'
+        : 'They regain access straight away.' +
+          (hold > 0 ? ' The daily status sync will leave them alone for ' + hold + ' days so they are not switched back before they have punched in.' : '')) +
+      '</div>' +
+      '<textarea id="admReason" class="adm-textarea adm-mt" placeholder="Reason (required, kept in the audit log)"></textarea>' +
+      '<div id="admSheetMsg" class="adm-bad adm-mt"></div>' +
+      '<div class="adm-row2"><button type="button" class="adm-btn alt" data-sheet-close="1">Cancel</button>' +
+      '<button type="button" id="admConfirmBtn" class="adm-btn ' + (target === 'Active' ? 'ok' : 'warn') + '" data-confirm-status="' + target + '" data-user="' + admEsc(userId) + '">' +
+      (target === 'Active' ? 'Mark active' : 'Mark inactive') + '</button></div>'
+    );
+
+  }
+
+  async function admStatusSubmit(el) {
+
+    if (adm.busy) return;
+
+    const reason = document.getElementById('admReason').value.trim();
+    const msg = document.getElementById('admSheetMsg');
+
+    if (reason.length < 3) { msg.textContent = 'Please give a reason.'; return; }
+
+    adm.busy = true;
+    el.disabled = true;
+
+    const userId = el.getAttribute('data-user');
+
+    try {
+
+      const res = await admCall('adminSetUserStatus', {
+        requestId: adm.requestId,
+        userId: userId,
+        status: el.getAttribute('data-confirm-status'),
+        reason: reason
+      });
+
+      adm.requestId = null;
+      admCloseSheet();
+      admToast(res.message || 'Done.');
+      admEmployee(userId);
+
+    } catch (err) {
+      adm.busy = false;
+      el.disabled = false;
+      msg.textContent = err.message;
+    }
+
+  }
+
+  function admWeekoffOpen(el) {
+
+    const userId = el.getAttribute('data-user');
+    const name = el.getAttribute('data-name');
+    const current = el.getAttribute('data-current') || '';
+
+    adm.requestId = admNewId();
+
+    const days = ['', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+    admOpenSheet(
+      '<div class="adm-line"><h3>Weekoff for ' + admEsc(name) + '</h3><button type="button" class="adm-icon-btn" data-sheet-close="1">&#10005;</button></div>' +
+      '<div class="adm-mut adm-mt">Applies from today. Earlier days keep the previous weekoff.</div>' +
+      '<select id="admWeekoffPick" class="adm-select adm-mt">' +
+      days.map(function(d) { return '<option value="' + d + '"' + (d === current ? ' selected' : '') + '>' + (d || 'Not set') + '</option>'; }).join('') +
+      '</select>' +
+      '<textarea id="admReason" class="adm-textarea adm-mt" placeholder="Reason (required, kept in the audit log)"></textarea>' +
+      '<div id="admSheetMsg" class="adm-bad adm-mt"></div>' +
+      '<div class="adm-row2"><button type="button" class="adm-btn alt" data-sheet-close="1">Cancel</button>' +
+      '<button type="button" id="admConfirmBtn" class="adm-btn" data-confirm-weekoff="1" data-user="' + admEsc(userId) + '">Save weekoff</button></div>'
+    );
+
+  }
+
+  async function admWeekoffSubmit(el) {
+
+    if (adm.busy) return;
+
+    const reason = document.getElementById('admReason').value.trim();
+    const msg = document.getElementById('admSheetMsg');
+
+    if (reason.length < 3) { msg.textContent = 'Please give a reason.'; return; }
+
+    adm.busy = true;
+    el.disabled = true;
+
+    const userId = el.getAttribute('data-user');
+
+    try {
+
+      const res = await admCall('adminSetWeekoff', {
+        requestId: adm.requestId,
+        userId: userId,
+        weekoff: document.getElementById('admWeekoffPick').value,
+        reason: reason
+      });
+
+      adm.requestId = null;
+      admCloseSheet();
+      admToast(res.message || 'Done.');
+      admEmployee(userId);
+
+    } catch (err) {
+      adm.busy = false;
+      el.disabled = false;
+      msg.textContent = err.message;
+    }
+
+  }
+
 
   /* ---------- Penalties ---------- */
 
@@ -7045,6 +7568,7 @@ const BACKEND_TIMEOUT_MS = 20000;
           '<div class="adm-wfmore" style="display:none">' +
           (r.holiday ? '<span class="adm-pill amber">Holiday: ' + admEsc(r.holiday) + '</span> ' : '') +
           '<span class="adm-pill">' + admEsc(r.type) + '</span><br>' +
+          (r.roomAttPrev !== null && r.roomAttPrev !== undefined ? 'Scanned into their room yesterday: <b>' + r.roomAttPrev + '</b><br>' : '') +
           'On leave (filed): ' + r.onLeaveKnown + ' · Expected late leave: ' + r.predLateLeave +
           ' · Expected uninformed: ' + r.predUninformed + ' · Expected new joinees: ' + r.predNewJoinees + '</div></div>';
 
@@ -7072,7 +7596,7 @@ const BACKEND_TIMEOUT_MS = 20000;
     admBody(
       '<div class="adm-seg">' +
       '<button type="button" data-ap-kind="resignation"' + (adm.apKind === 'resignation' ? ' class="active"' : '') + '>Resignations</button>' +
-      '<button type="button" data-ap-kind="longLeave"' + (adm.apKind === 'longLeave' ? ' class="active"' : '') + '>Long leaves</button></div>' +
+      '<button type="button" data-ap-kind="longLeave"' + (adm.apKind === 'longLeave' ? ' class="active"' : '') + '>Long leaves</button>' + '<button type="button" data-ap-kind="contest"' + (adm.apKind === 'contest' ? ' class="active"' : '') + '>Contests</button></div>' +
       '<div class="adm-seg">' +
       '<button type="button" data-ap-status="Pending"' + (adm.apStatus === 'Pending' ? ' class="active"' : '') + '>Pending</button>' +
       '<button type="button" data-ap-status="All"' + (adm.apStatus === 'All' ? ' class="active"' : '') + '>All</button></div>' +
@@ -7080,6 +7604,8 @@ const BACKEND_TIMEOUT_MS = 20000;
     );
 
     try {
+
+      if (adm.apKind === 'contest') return admContestList();
 
       const res = await admCall('adminListApprovals', { kind: adm.apKind, status: adm.apStatus });
       if (adm.tab !== 'approvals') return;
@@ -7139,6 +7665,8 @@ const BACKEND_TIMEOUT_MS = 20000;
   }
 
   function admDecideOpen(decision, applicationId) {
+
+    if (adm.apKind === 'contest') return admContestDecideOpen(decision, applicationId);
 
     const x = admApItems[applicationId];
     if (!x) return;
@@ -7272,6 +7800,11 @@ const BACKEND_TIMEOUT_MS = 20000;
 
       let el;
 
+      if ((el = e.target.closest('[data-set-status]'))) return admStatusOpen(el);
+      if ((el = e.target.closest('[data-set-weekoff]'))) return admWeekoffOpen(el);
+      if ((el = e.target.closest('[data-confirm-status]'))) return admStatusSubmit(el);
+      if ((el = e.target.closest('[data-confirm-weekoff]'))) return admWeekoffSubmit(el);
+
       if ((el = e.target.closest('[data-pen-user]'))) {
         adm.pen.q = el.getAttribute('data-pen-user');
         admCloseSheet();
@@ -7280,6 +7813,10 @@ const BACKEND_TIMEOUT_MS = 20000;
 
       if ((el = e.target.closest('[data-confirm-pen]'))) {
         return admPenSubmit(el.getAttribute('data-confirm-pen'), Number(el.getAttribute('data-min')));
+      }
+
+      if ((el = e.target.closest('[data-confirm-contest]'))) {
+        return admContestSubmit(el.getAttribute('data-confirm-contest'), el.getAttribute('data-app'), Number(el.getAttribute('data-max')));
       }
 
       if ((el = e.target.closest('[data-confirm-decide]'))) {
