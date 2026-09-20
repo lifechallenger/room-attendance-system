@@ -971,6 +971,13 @@ body.adm-no-employee #weekoffInfo { display: none !important; }
 .adm-wfrow.future { background: #f8fbff; }
 .adm-wfmore { font-size: 13px; color: #5f6368; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #dadce0; }
 
+.adm-det { background: #f8f9fa; border-radius: 8px; padding: 8px 10px; margin-top: 8px; font-size: 13px; }
+.adm-det-sum { font-size: 14px; line-height: 1.4; margin-bottom: 4px; }
+.adm-det-title { font-size: 11px; font-weight: 700; color: #5f6368; text-transform: uppercase; letter-spacing: .3px; margin: 8px 0 2px; }
+.adm-det-row { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; }
+.adm-det-row span { color: #5f6368; }
+.adm-det-row b { font-weight: 600; text-align: right; }
+.adm-why-box { margin-top: 2px; }
 /* ---- contest a penalty (employee) ---- */
 .ct-row { border: 1px solid #e3e6ea; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; background: #fff; }
 .ct-line { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
@@ -2253,13 +2260,7 @@ const BACKEND_TIMEOUT_MS = 20000;
   ) {
 
     return submitViaJsonp(
-      Object.assign(
-        {
-          action: action,
-          googleIdToken: googleIdToken
-        },
-        extra || {}
-      )
+      Object.assign({}, extra || {}, { action: action, googleIdToken: googleIdToken })
     );
 
   }
@@ -7055,6 +7056,52 @@ const BACKEND_TIMEOUT_MS = 20000;
     }
 
   }
+  /* ---------- "Why was this penalty charged?" ---------- */
+
+  function admDetailsHtml(d) {
+
+    if (!d) return '';
+
+    return '<div class="adm-det">' +
+      (d.summary ? '<div class="adm-det-sum">' + admEsc(d.summary) + '</div>' : '') +
+      (d.groups || []).map(function(g) {
+        return '<div class="adm-det-title">' + admEsc(g.title) + '</div>' +
+          g.lines.map(function(l) {
+            return '<div class="adm-det-row"><span>' + admEsc(l.label) + '</span><b>' + admEsc(l.value) + '</b></div>';
+          }).join('');
+      }).join('') +
+      '</div>';
+
+  }
+
+  function admWhyButton(key) {
+    return '<button type="button" class="adm-linkish adm-mt" data-pen-why="' + admEsc(key) + '">Why this penalty?</button>' +
+      '<div class="adm-why-box"></div>';
+  }
+
+  async function admPenWhy(el) {
+
+    const box = el.nextElementSibling;
+    if (!box) return;
+
+    if (box.getAttribute('data-loaded') === '1') {
+      box.style.display = box.style.display === 'none' ? 'block' : 'none';
+      return;
+    }
+
+    box.innerHTML = '<div class="adm-mut">Loading&hellip;</div>';
+
+    try {
+      const res = await admCall('adminPenaltyDetails', { key: el.getAttribute('data-pen-why') });
+      box.innerHTML = admDetailsHtml(res.details);
+      box.setAttribute('data-loaded', '1');
+    } catch (err) {
+      box.innerHTML = '';
+      admFail(err);
+    }
+
+  }
+
   /* ---------- Contests (in Approvals) ---------- */
 
   async function admContestList() {
@@ -7082,6 +7129,7 @@ const BACKEND_TIMEOUT_MS = 20000;
               '<div class="adm-mut">' + admEsc(x.userId) + ' · sent ' + admEsc(x.submittedAt) + '</div>' +
               '<div class="adm-mt"><b>' + admEsc(x.type) + '</b> · ' + admNiceDate(x.date) + ' · ' + admMoney(x.amount) + '</div>' +
               '<div class="adm-mt" style="font-size:14px">“' + admEsc(x.reason) + '”</div>' +
+              (x.details ? admDetailsHtml(x.details) : admWhyButton(x.key)) +
               (x.outcome && x.outcome !== 'None'
                 ? '<div class="adm-mut adm-mt">' + admEsc(x.outcome) + (x.outcomeAmount !== null ? ' to ' + admMoney(x.outcomeAmount) : '') + '</div>'
                 : '') +
@@ -7118,6 +7166,7 @@ const BACKEND_TIMEOUT_MS = 20000;
       '<div class="adm-line"><h3>' + (accept ? 'Accept' : 'Reject') + ' this contest?</h3><button type="button" class="adm-icon-btn" data-sheet-close="1">&#10005;</button></div>' +
       '<div class="adm-mut">' + admEsc(x.name || x.userId) + ' · ' + admEsc(x.type) + ' · ' + admNiceDate(x.date) + ' · ' + admMoney(x.amount) + '</div>' +
       '<div class="adm-mt" style="font-size:14px">“' + admEsc(x.reason) + '”</div>' +
+      (x.details && x.details.summary ? '<div class="adm-det"><div class="adm-det-sum">' + admEsc(x.details.summary) + '</div></div>' : '') +
       (accept
         ? '<div class="adm-mt"><label style="display:block;padding:6px 0"><input type="radio" name="admCtMode" value="waive" checked ' +
           'onchange="document.getElementById(\'admCtAmt\').disabled = true"> Waive fully (₹0)</label>' +
@@ -7396,6 +7445,7 @@ const BACKEND_TIMEOUT_MS = 20000;
       '<div class="adm-mut">' + admEsc(x.type) + ' · ' + admNiceDate(x.date) + ' · ' + admEsc(x.userId) + '</div>' +
       '<div class="adm-mt"><b>' + (x.current === x.original ? admMoney(x.current) : '<s>' + admMoney(x.original) + '</s> ' + admMoney(x.current)) + '</b></div>' +
       (x.reason ? '<div class="adm-mut">' + admEsc(x.state) + (x.changedBy ? ' by ' + admEsc(x.changedBy) : '') + ': ' + admEsc(x.reason) + '</div>' : '') +
+      admWhyButton(x.key) +
       '</div></div>';
 
   }
@@ -7516,7 +7566,7 @@ const BACKEND_TIMEOUT_MS = 20000;
 
       const res = await admCall('adminPenaltyAction', {
         requestId: adm.requestId,
-        action: action,
+        change: action,
         amount: amount,
         reason: reason,
         items: Object.keys(adm.pen.selected)
@@ -7745,6 +7795,7 @@ const BACKEND_TIMEOUT_MS = 20000;
     const t = e.target;
     let el;
 
+    if ((el = t.closest('[data-pen-why]'))) return admPenWhy(el);
     if ((el = t.closest('[data-emp]'))) return admEmployee(el.getAttribute('data-emp'));
 
     if ((el = t.closest('[data-goto]'))) {
