@@ -6858,7 +6858,7 @@ const BACKEND_TIMEOUT_MS = 20000;
           '<div class="adm-k">' + shift + ' shift</div>' +
           '<div class="adm-v">' + c.punched + '<span>/ ' + c.listed + ' in</span></div>' +
           '<div class="adm-sub ' + (notIn > 0 ? 'adm-bad' : '') + '">' +
-          (c.listed ? notIn + ' not punched in' : 'List not ready yet') + '</div></button>';
+          (c.listed ? notIn + ' not punched in' + (c.extra ? ' \u00B7 +' + c.extra + ' not on the list' : '') : 'List not ready yet') + '</div></button>';
       }
 
       const f = o.forecastToday;
@@ -6965,7 +6965,8 @@ const BACKEND_TIMEOUT_MS = 20000;
         const notIn = counts.listed - counts.punched;
         html = '<div class="adm-card"><div class="adm-line"><div><div class="adm-v">' + counts.punched +
           '<span>/ ' + counts.listed + ' punched in</span></div></div>' +
-          '<span class="adm-pill ' + (notIn ? 'red' : 'green') + '">' + notIn + ' not in</span></div></div>';
+          '<span class="adm-pill ' + (notIn ? 'red' : 'green') + '">' + notIn + ' not in</span></div>' +
+          (counts.extra ? '<div class="adm-sub">+' + counts.extra + ' more punched in who were not on the list (below)</div>' : '') + '</div>';
 
         html += res.people.map(function(p) {
           const isIn = p.status === 'Punched In';
@@ -6974,6 +6975,22 @@ const BACKEND_TIMEOUT_MS = 20000;
             '<span class="adm-pill ' + (isIn ? 'green' : 'red') + '">' + (isIn ? 'In ' + admEsc(p.punchedAt) : 'Not in') + '</span></div>' +
             '<div class="adm-mut">' + admEsc(p.userId) + (p.room ? ' · ' + admEsc(p.room) : '') + '</div></button>';
         }).join('');
+
+        const extras = (res.extras || []).filter(function(e) { return e.shift === adm.shift; });
+
+        if (extras.length) {
+          html += '<div class="adm-h">Punched in, not on the list (' + extras.length + ')</div>' +
+            extras.map(function(e) {
+              const known = e.reason !== 'Not in the Users sheet';
+              return (known
+                  ? '<button type="button" class="adm-card adm-tap" data-emp="' + admEsc(e.userId) + '">'
+                  : '<div class="adm-card">') +
+                '<div class="adm-line"><span class="adm-name">' + admEsc(e.name || e.userId) + '</span>' +
+                '<span class="adm-pill blue">In ' + admEsc(e.punchedAt) + '</span></div>' +
+                '<div class="adm-mut">' + admEsc(e.userId) + ' \u00B7 ' + admEsc(e.reason) + '</div>' +
+                (known ? '</button>' : '</div>');
+            }).join('');
+        }
       }
 
       document.getElementById('admPresList').innerHTML = html;
@@ -7015,8 +7032,10 @@ const BACKEND_TIMEOUT_MS = 20000;
       const weekoffOn = !!(adm.access && adm.access.weekoffEditEnabled);
       const today = admDateKey(new Date());
       const dataUser = ' data-user="' + admEsc(p.userId) + '" data-name="' + admEsc(p.name || p.userId) + '"';
-      const statusBtn = '<button type="button" class="adm-btn ' + (isActive ? 'warn' : 'ok') + (weekoffOn ? '' : ' block') + '" data-set-status="' + (isActive ? 'Inactive' : 'Active') + '"' + dataUser + ' data-hold="' + (r.manualHoldDays || 0) + '">' + (isActive ? 'Mark inactive' : 'Mark active') + '</button>';
+      const statusBtn = '<button type="button" class="adm-btn ' + (isActive ? 'warn' : 'ok') + ' block' + '" data-set-status="' + (isActive ? 'Inactive' : 'Active') + '"' + dataUser + ' data-hold="' + (r.manualHoldDays || 0) + '">' + (isActive ? 'Mark inactive' : 'Mark active') + '</button>';
       const weekoffBtn = weekoffOn ? '<button type="button" class="adm-btn alt" data-set-weekoff="1"' + dataUser + ' data-current="' + admEsc(p.weekoff || '') + '">Change weekoff</button>' : '';
+      adm.shiftOptions = r.shiftOptions || [];
+      const shiftBtn = '<button type="button" class="adm-btn alt' + (weekoffOn ? '' : ' block') + '" data-set-shift="1"' + dataUser + ' data-current="' + admEsc(p.shiftId || '') + '">Change shift</button>';
 
       admOpenSheet(
         '<div class="adm-line"><h3>' + admEsc(p.name || p.userId) + '</h3><button type="button" class="adm-icon-btn" data-sheet-close="1">&#10005;</button></div>' +
@@ -7030,7 +7049,7 @@ const BACKEND_TIMEOUT_MS = 20000;
         (p.room ? ' · Room: ' + admEsc(p.room) : '') + '</div>' +
         (r.statusNote ? '<div class="adm-mut adm-mt">Status note: ' + admEsc(r.statusNote.reason) + '</div>' : '') +
         (r.statusNote && r.statusNote.holdUntil && r.statusNote.holdUntil >= today ? '<div class="adm-mut">Automatic status changes are paused until ' + admNiceDate(r.statusNote.holdUntil) + '.</div>' : '') +
-        (canWrite ? '<div class="adm-row2">' + statusBtn + weekoffBtn + '</div>' : '') +
+        (canWrite ? '<div class="adm-mt">' + statusBtn + '</div><div class="' + (weekoffOn ? 'adm-row2' : 'adm-mt') + '">' + shiftBtn + weekoffBtn + '</div>' : '') +
 
         '<details open><summary>Penalties, last 45 days (' + r.penalties.length + ')</summary>' +
         mini(r.penalties, function(x) {
@@ -7359,6 +7378,69 @@ const BACKEND_TIMEOUT_MS = 20000;
 
   }
 
+
+  function admShiftOpen(el) {
+
+    const userId = el.getAttribute('data-user');
+    const name = el.getAttribute('data-name');
+    const current = el.getAttribute('data-current') || '';
+    const options = adm.shiftOptions || [];
+
+    adm.requestId = admNewId();
+
+    admOpenSheet(
+      '<div class="adm-line"><h3>Shift for ' + admEsc(name) + '</h3><button type="button" class="adm-icon-btn" data-sheet-close="1">&#10005;</button></div>' +
+      '<div class="adm-mut adm-mt">Forecasts and shift lists pick this up on their next refresh. Late-punch rules use the current shift for the whole month.</div>' +
+      '<select id="admShiftPick" class="adm-select adm-mt">' +
+      (options.some(function(o) { return o.id === current; }) ? '' : '<option value="">Choose a shift</option>') +
+      options.map(function(o) { return '<option value="' + admEsc(o.id) + '"' + (o.id === current ? ' selected' : '') + '>' + admEsc(o.name) + '</option>'; }).join('') +
+      '</select>' +
+      '<textarea id="admReason" class="adm-textarea adm-mt" placeholder="Reason (required, kept in the audit log)"></textarea>' +
+      '<div id="admSheetMsg" class="adm-bad adm-mt"></div>' +
+      '<div class="adm-row2"><button type="button" class="adm-btn alt" data-sheet-close="1">Cancel</button>' +
+      '<button type="button" id="admConfirmBtn" class="adm-btn" data-confirm-shift="1" data-user="' + admEsc(userId) + '" data-current="' + admEsc(current) + '">Save shift</button></div>'
+    );
+
+  }
+
+  async function admShiftSubmit(el) {
+
+    if (adm.busy) return;
+
+    const reason = document.getElementById('admReason').value.trim();
+    const shiftId = document.getElementById('admShiftPick').value;
+    const msg = document.getElementById('admSheetMsg');
+
+    if (!shiftId) { msg.textContent = 'Choose a shift.'; return; }
+    if (shiftId === el.getAttribute('data-current')) { msg.textContent = 'That is already their shift.'; return; }
+    if (reason.length < 3) { msg.textContent = 'Please give a reason.'; return; }
+
+    adm.busy = true;
+    el.disabled = true;
+
+    const userId = el.getAttribute('data-user');
+
+    try {
+
+      const res = await admCall('adminSetShift', {
+        requestId: adm.requestId,
+        userId: userId,
+        shiftId: shiftId,
+        reason: reason
+      });
+
+      adm.requestId = null;
+      admCloseSheet();
+      admToast(res.message || 'Done.');
+      admEmployee(userId);
+
+    } catch (err) {
+      adm.busy = false;
+      el.disabled = false;
+      msg.textContent = err.message;
+    }
+
+  }
 
   /* ---------- Penalties ---------- */
 
@@ -7865,6 +7947,8 @@ const BACKEND_TIMEOUT_MS = 20000;
 
       if ((el = e.target.closest('[data-set-status]'))) return admStatusOpen(el);
       if ((el = e.target.closest('[data-set-weekoff]'))) return admWeekoffOpen(el);
+      if ((el = e.target.closest('[data-set-shift]'))) return admShiftOpen(el);
+      if ((el = e.target.closest('[data-confirm-shift]'))) return admShiftSubmit(el);
       if ((el = e.target.closest('[data-confirm-status]'))) return admStatusSubmit(el);
       if ((el = e.target.closest('[data-confirm-weekoff]'))) return admWeekoffSubmit(el);
 
