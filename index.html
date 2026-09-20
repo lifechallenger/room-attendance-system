@@ -824,7 +824,154 @@
       }
     }
 
-  </style>
+  
+/* =====================================================
+   ADMIN PORTAL (mobile first; everything is prefixed adm-)
+   ===================================================== */
+
+body.adm-open { overflow: hidden; }
+body.adm-no-employee #scannerCard, body.adm-no-employee #employeeTools, body.adm-no-employee #summaryCard,
+body.adm-no-employee #instructions, body.adm-no-employee #locationCard, body.adm-no-employee #attendanceTodayInfo,
+body.adm-no-employee #weekoffInfo { display: none !important; }
+
+.adm-overlay {
+  position: fixed; inset: 0; z-index: 2000;
+  background: #f5f7fa; display: flex; flex-direction: column;
+  font-size: 15px;
+}
+.adm-overlay.hidden { display: none; }
+
+.adm-top {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; padding-top: max(10px, env(safe-area-inset-top));
+  background: #fff; border-bottom: 1px solid #e3e6ea; flex: 0 0 auto;
+}
+.adm-top-title { font-size: 17px; font-weight: 700; }
+.adm-badge {
+  display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 10px;
+  font-size: 11px; font-weight: 700; background: #e8f0fe; color: #1a73e8; vertical-align: middle;
+}
+.adm-icon-btn {
+  width: 40px; height: 40px; border: 0; border-radius: 20px; background: #f1f3f4;
+  font-size: 18px; cursor: pointer; color: #202124;
+}
+
+.adm-body {
+  flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding: 12px 12px 90px; width: 100%; max-width: 720px; margin: 0 auto;
+}
+
+.adm-tabs {
+  flex: 0 0 auto; display: flex; background: #fff; border-top: 1px solid #e3e6ea;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.adm-tabs button {
+  flex: 1; border: 0; background: none; padding: 11px 2px; font-size: 12px;
+  color: #5f6368; cursor: pointer; font-weight: 600; min-height: 48px;
+}
+.adm-tabs button.active { color: #1a73e8; box-shadow: inset 0 3px 0 #1a73e8; }
+
+.adm-card {
+  display: block; width: 100%; text-align: left; background: #fff; border: 0;
+  border-radius: 12px; padding: 12px 14px; margin: 0 0 10px;
+  box-shadow: 0 1px 2px rgba(60,64,67,.18); font: inherit; color: inherit;
+}
+.adm-tap { cursor: pointer; }
+.adm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.adm-grid .adm-card { margin: 0; }
+.adm-k { font-size: 12px; color: #5f6368; font-weight: 600; text-transform: uppercase; letter-spacing: .3px; }
+.adm-v { font-size: 26px; font-weight: 700; margin-top: 2px; }
+.adm-v span { font-size: 14px; font-weight: 600; color: #5f6368; margin-left: 3px; }
+.adm-sub { font-size: 13px; color: #5f6368; margin-top: 2px; }
+.adm-bad { color: #d93025; font-weight: 700; }
+.adm-good { color: #188038; font-weight: 700; }
+.adm-empty { text-align: center; color: #5f6368; padding: 28px 8px; }
+.adm-h { font-size: 13px; font-weight: 700; color: #5f6368; margin: 14px 2px 6px; text-transform: uppercase; letter-spacing: .3px; }
+
+.adm-seg { display: flex; background: #e8eaed; border-radius: 10px; padding: 3px; margin-bottom: 10px; }
+.adm-seg button {
+  flex: 1; border: 0; background: none; padding: 9px 4px; border-radius: 8px;
+  font-size: 14px; font-weight: 600; color: #5f6368; cursor: pointer; min-height: 40px;
+}
+.adm-seg button.active { background: #fff; color: #1a73e8; box-shadow: 0 1px 2px rgba(60,64,67,.25); }
+
+.adm-input, .adm-select, .adm-textarea {
+  width: 100%; padding: 11px 12px; border: 1px solid #dadce0; border-radius: 10px;
+  font: inherit; background: #fff; min-height: 44px;
+}
+.adm-textarea { min-height: 76px; resize: vertical; }
+.adm-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.adm-mt { margin-top: 8px; }
+
+.adm-btn {
+  border: 0; border-radius: 10px; padding: 11px 14px; font: inherit; font-weight: 700;
+  background: #1a73e8; color: #fff; cursor: pointer; min-height: 44px;
+}
+.adm-btn.alt { background: #e8f0fe; color: #1a73e8; }
+.adm-btn.warn { background: #fce8e6; color: #c5221f; }
+.adm-btn.ok { background: #e6f4ea; color: #188038; }
+.adm-btn:disabled { opacity: .45; cursor: default; }
+.adm-btn.block { width: 100%; }
+
+.adm-pill {
+  display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 12px;
+  font-weight: 700; background: #f1f3f4; color: #5f6368; white-space: nowrap;
+}
+.adm-pill.red { background: #fce8e6; color: #c5221f; }
+.adm-pill.green { background: #e6f4ea; color: #188038; }
+.adm-pill.amber { background: #fef7e0; color: #b06000; }
+.adm-pill.blue { background: #e8f0fe; color: #1a73e8; }
+
+.adm-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.adm-name { font-weight: 700; }
+.adm-mut { color: #5f6368; font-size: 13px; }
+.adm-linkish { color: #1a73e8; background: none; border: 0; padding: 0; font: inherit; font-weight: 700; cursor: pointer; text-align: left; }
+
+.adm-pick { display: flex; gap: 10px; align-items: flex-start; }
+.adm-pick input[type=checkbox] { width: 22px; height: 22px; margin-top: 2px; flex: 0 0 auto; }
+.adm-pick .adm-main { flex: 1; min-width: 0; }
+
+.adm-bar {
+  position: fixed; left: 0; right: 0; bottom: calc(48px + env(safe-area-inset-bottom));
+  z-index: 2001; background: #fff; border-top: 1px solid #e3e6ea; padding: 10px 12px;
+  box-shadow: 0 -2px 8px rgba(60,64,67,.15);
+}
+.adm-bar.hidden { display: none; }
+.adm-bar-inner { max-width: 720px; margin: 0 auto; }
+.adm-bar-actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px; }
+
+.adm-sheet-wrap {
+  position: fixed; inset: 0; z-index: 2100; background: rgba(32,33,36,.5);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.adm-sheet-wrap.hidden { display: none; }
+.adm-sheet {
+  background: #fff; width: 100%; max-width: 720px; max-height: 88vh; overflow-y: auto;
+  border-radius: 16px 16px 0 0; padding: 16px 14px; padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
+.adm-sheet h3 { margin: 0 0 4px; font-size: 18px; }
+.adm-sheet details { border-top: 1px solid #eceff1; padding: 8px 0; }
+.adm-sheet summary { font-weight: 700; cursor: pointer; padding: 6px 0; }
+.adm-mini { font-size: 13px; padding: 6px 0; border-bottom: 1px dashed #eceff1; }
+.adm-mini:last-child { border-bottom: 0; }
+
+.adm-toast {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: 130px; z-index: 2200;
+  background: #202124; color: #fff; padding: 10px 16px; border-radius: 22px; font-size: 14px;
+  max-width: 90%; text-align: center;
+}
+.adm-toast.hidden { display: none; }
+.adm-toast.err { background: #c5221f; }
+
+.adm-wf { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr 1fr; gap: 4px; align-items: center; font-size: 14px; }
+.adm-wf.head { font-size: 11px; font-weight: 700; color: #5f6368; text-transform: uppercase; }
+.adm-wf b { font-weight: 700; }
+.adm-wfrow { background: #fff; border-radius: 10px; padding: 9px 10px; margin-bottom: 6px; box-shadow: 0 1px 2px rgba(60,64,67,.15); cursor: pointer; }
+.adm-wfrow.today { box-shadow: inset 0 0 0 2px #1a73e8; }
+.adm-wfrow.future { background: #f8fbff; }
+.adm-wfmore { font-size: 13px; color: #5f6368; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #dadce0; }
+
+</style>
 </head>
 
 
@@ -860,6 +1007,8 @@
       <div id="userName"></div>
 
       <div id="userEmail"></div>
+
+      <button type="button" id="adminOpenBtn" class="secondary hidden" style="margin-top:10px">Open admin portal</button>
 
       <div id="attendanceTodayInfo"
            class="attendance-today hidden">
@@ -1485,6 +1634,49 @@
 </div>
 
 
+
+<!-- =====================================================
+     ADMIN PORTAL (only reachable when the server says the
+     signed-in Gmail is listed in Admin_Users)
+     ===================================================== -->
+
+<div id="admOverlay" class="adm-overlay hidden">
+
+  <div class="adm-top">
+    <div class="adm-top-title">Admin<span id="admRole" class="adm-badge"></span></div>
+    <button type="button" id="admClose" class="adm-icon-btn" aria-label="Close admin portal">&#10005;</button>
+  </div>
+
+  <div id="admBody" class="adm-body"></div>
+
+  <div id="admBar" class="adm-bar hidden">
+    <div class="adm-bar-inner">
+      <div id="admBarInfo" class="adm-line"></div>
+      <div class="adm-bar-actions">
+        <button type="button" class="adm-btn ok" data-bar="waive">Waive</button>
+        <button type="button" class="adm-btn alt" data-bar="reduce">Reduce</button>
+        <button type="button" class="adm-btn warn" data-bar="reestablish">Reestablish</button>
+      </div>
+    </div>
+  </div>
+
+  <nav id="admTabs" class="adm-tabs">
+    <button type="button" data-tab="home" class="active">Home</button>
+    <button type="button" data-tab="presence">Presence</button>
+    <button type="button" data-tab="penalties">Penalties</button>
+    <button type="button" data-tab="workforce">Workforce</button>
+    <button type="button" data-tab="approvals">Approvals</button>
+  </nav>
+
+  <div id="admSheetWrap" class="adm-sheet-wrap hidden">
+    <div id="admSheet" class="adm-sheet"></div>
+  </div>
+
+  <div id="admToast" class="adm-toast hidden"></div>
+
+</div>
+
+
 <script>
 
   /* =====================================================
@@ -1771,6 +1963,7 @@ const BACKEND_TIMEOUT_MS = 20000;
 
     loadSelfServiceBootstrap();
     loadEmployeeSummaryOnly();
+    adminCheckAccess_();
     // Preload the small active-room list in parallel so opening the room
     // assignment form does not wait for a second round trip.
     preloadRoomAssignmentOptions_().catch(function(error) {
@@ -6216,6 +6409,889 @@ const BACKEND_TIMEOUT_MS = 20000;
       'block';
 
   }
+
+
+  /* =====================================================
+     ADMIN PORTAL
+     The server decides who is an admin (Admin_Users sheet) on every
+     request; this code only shows or hides the UI. All figures come
+     from the sheets, nothing is computed here.
+     ===================================================== */
+
+  const adm = {
+    access: null,
+    tab: 'home',
+    shift: 'Day',
+    wfShift: 'Total',
+    apKind: 'resignation',
+    apStatus: 'Pending',
+    timer: null,
+    pen: { items: [], selected: {}, cap: 10, q: '', from: '', to: '', type: '' },
+    requestId: null,
+    busy: false
+  };
+
+  function admEsc(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, function(c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function admMoney(n) {
+    return '₹' + Number(n || 0).toLocaleString('en-IN');
+  }
+
+  function admNewId() {
+    return (window.crypto && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : 'r' + Date.now() + '-' + Math.random().toString(36).slice(2);
+  }
+
+  function admDateKey(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  function admAddDays(key, n) {
+    const p = key.split('-').map(Number);
+    return admDateKey(new Date(p[0], p[1] - 1, p[2] + n));
+  }
+
+  function admNiceDate(key) {
+    if (!key) return '';
+    const p = key.split('-').map(Number);
+    return new Date(p[0], p[1] - 1, p[2]).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+  }
+
+  function admCall(action, extra) {
+    return selfServiceJsonp(action, extra).then(function(res) {
+      if (!res || res.success !== true) {
+        const err = new Error((res && res.message) || 'Request failed.');
+        err.failures = res && res.failures;
+        throw err;
+      }
+      return res;
+    });
+  }
+
+  function admToast(message, isError) {
+    const el = document.getElementById('admToast');
+    el.textContent = message;
+    el.className = 'adm-toast' + (isError ? ' err' : '');
+    clearTimeout(admToast.t);
+    admToast.t = setTimeout(function() { el.className = 'adm-toast hidden'; }, isError ? 5000 : 2600);
+  }
+
+  function admFail(err) {
+    const message = err && err.message ? err.message : 'Something went wrong.';
+    if (/admin access/i.test(message)) {
+      admClose();
+      return;
+    }
+    admToast(message, true);
+  }
+
+  function admBody(html) {
+    document.getElementById('admBody').innerHTML = html;
+  }
+
+  function admStopTimer() {
+    clearTimeout(adm.timer);
+    adm.timer = null;
+  }
+
+  /* ---------- access check + open / close ---------- */
+
+  function adminCheckAccess_() {
+
+    selfServiceJsonp('adminWhoAmI').then(function(res) {
+
+      if (res && res.success && res.isAdmin) {
+        adm.access = res;
+        const btn = document.getElementById('adminOpenBtn');
+        if (btn) btn.classList.remove('hidden');
+
+        if (res.isEmployee === false) {
+          document.body.classList.add('adm-no-employee');
+          admOpen();
+        }
+      }
+
+    }).catch(function() { /* not an admin, or offline: stay hidden */ });
+
+  }
+
+  function admOpen() {
+    if (!adm.access) return;
+    document.getElementById('admRole').textContent = adm.access.role + (adm.access.canWrite ? '' : ' · read only');
+    document.getElementById('admOverlay').classList.remove('hidden');
+    document.body.classList.add('adm-open');
+    admShowTab(adm.tab || 'home');
+  }
+
+  function admClose() {
+    admStopTimer();
+    admCloseSheet();
+    document.getElementById('admBar').classList.add('hidden');
+    document.getElementById('admOverlay').classList.add('hidden');
+    document.body.classList.remove('adm-open');
+  }
+
+  function admShowTab(tab) {
+
+    admStopTimer();
+    adm.tab = tab;
+
+    document.querySelectorAll('#admTabs button').forEach(function(b) {
+      b.classList.toggle('active', b.getAttribute('data-tab') === tab);
+    });
+
+    document.getElementById('admBar').classList.add('hidden');
+    document.getElementById('admBody').scrollTop = 0;
+
+    if (tab === 'home') admHome();
+    else if (tab === 'presence') admPresence();
+    else if (tab === 'penalties') admPenalties();
+    else if (tab === 'workforce') admWorkforce();
+    else if (tab === 'approvals') admApprovals();
+
+  }
+
+  /* ---------- bottom sheet ---------- */
+
+  function admOpenSheet(html) {
+    document.getElementById('admSheet').innerHTML = html;
+    document.getElementById('admSheetWrap').classList.remove('hidden');
+  }
+
+  function admCloseSheet() {
+    document.getElementById('admSheetWrap').classList.add('hidden');
+    document.getElementById('admSheet').innerHTML = '';
+    adm.busy = false;
+  }
+
+  /* ---------- Home ---------- */
+
+  async function admHome() {
+
+    admBody('<div class="adm-empty">Loading&hellip;</div>');
+
+    try {
+
+      const o = await admCall('adminOverview');
+      if (adm.tab !== 'home') return;
+
+      function shiftCard(shift) {
+        const c = (o.presence && o.presence[shift]) || { listed: 0, punched: 0 };
+        const notIn = c.listed - c.punched;
+        return '<button type="button" class="adm-card adm-tap" data-goto="presence" data-shift="' + shift + '">' +
+          '<div class="adm-k">' + shift + ' shift</div>' +
+          '<div class="adm-v">' + c.punched + '<span>/ ' + c.listed + ' in</span></div>' +
+          '<div class="adm-sub ' + (notIn > 0 ? 'adm-bad' : '') + '">' +
+          (c.listed ? notIn + ' not punched in' : 'List not ready yet') + '</div></button>';
+      }
+
+      const f = o.forecastToday;
+      const h = o.headcount;
+
+      admBody(
+        '<div class="adm-grid">' + shiftCard('Day') + shiftCard('Night') + '</div>' +
+
+        '<button type="button" class="adm-card adm-tap" data-goto="workforce">' +
+        '<div class="adm-k">Today’s workforce</div>' +
+        (f
+          ? '<div class="adm-v">' + f.expected + '<span>expected of ' + f.scheduled + ' scheduled</span></div>' +
+            '<div class="adm-sub">' + f.onLeaveKnown + ' on approved/applied leave</div>'
+          : '<div class="adm-sub">No forecast row yet.</div>') +
+        '</button>' +
+
+        '<div class="adm-card"><div class="adm-k">Headcount' + (h ? ' · ' + admNiceDate(h.date) : '') + '</div>' +
+        (h
+          ? '<div class="adm-sub"><b>' + h.active + '</b> active · <b>' + h.onLeave + '</b> on leave · ' + h.inactive + ' inactive</div>'
+          : '<div class="adm-sub">Not logged yet.</div>') + '</div>' +
+
+        '<button type="button" class="adm-card adm-tap" data-goto="approvals">' +
+        '<div class="adm-k">Waiting for a decision</div>' +
+        '<div class="adm-sub"><b>' + o.pending.resignations + '</b> resignation' + (o.pending.resignations === 1 ? '' : 's') +
+        ' · <b>' + o.pending.longLeaves + '</b> long leave' + (o.pending.longLeaves === 1 ? '' : 's') + '</div></button>' +
+
+        '<div class="adm-h">Find an employee</div>' +
+        '<input id="admEmpQ" class="adm-input" type="search" placeholder="Name, User ID or email" autocomplete="off">' +
+        '<div id="admEmpResults" class="adm-mt"></div>'
+      );
+
+    } catch (err) {
+      admBody('<div class="adm-empty">Could not load. <button type="button" class="adm-linkish" data-goto="home">Retry</button></div>');
+      admFail(err);
+    }
+
+  }
+
+  async function admEmpSearch(q) {
+
+    const box = document.getElementById('admEmpResults');
+    if (!box) return;
+
+    if (q.trim().length < 2) {
+      box.innerHTML = '';
+      return;
+    }
+
+    try {
+
+      const res = await admCall('adminEmployeeSearch', { q: q.trim() });
+      const current = document.getElementById('admEmpQ');
+      if (!current || current.value.trim() !== q.trim()) return;
+
+      box.innerHTML = res.employees.length
+        ? res.employees.map(function(e) {
+            return '<button type="button" class="adm-card adm-tap" data-emp="' + admEsc(e.userId) + '">' +
+              '<div class="adm-line"><span class="adm-name">' + admEsc(e.name || e.userId) + '</span>' +
+              '<span class="adm-pill ' + (e.status.toLowerCase() === 'active' ? 'green' : '') + '">' + admEsc(e.status) + '</span></div>' +
+              '<div class="adm-mut">' + admEsc(e.userId) + (e.isSupervisor ? ' · supervisor' : '') + '</div></button>';
+          }).join('')
+        : '<div class="adm-empty">No match.</div>';
+
+    } catch (err) {
+      admFail(err);
+    }
+
+  }
+
+  /* ---------- Presence ---------- */
+
+  async function admPresence() {
+
+    admStopTimer();
+
+    admBody(
+      '<div class="adm-seg" id="admShiftSeg">' +
+      '<button type="button" data-shift-pick="Day"' + (adm.shift === 'Day' ? ' class="active"' : '') + '>Day</button>' +
+      '<button type="button" data-shift-pick="Night"' + (adm.shift === 'Night' ? ' class="active"' : '') + '>Night</button></div>' +
+      '<div class="adm-line adm-mt"><span id="admPresStamp" class="adm-mut"></span>' +
+      '<button type="button" class="adm-btn alt" data-refresh="presence">Refresh</button></div>' +
+      '<div id="admPresList" class="adm-mt"><div class="adm-empty">Loading&hellip;</div></div>'
+    );
+
+    try {
+
+      const res = await admCall('adminLivePresence', { shift: adm.shift });
+      if (adm.tab !== 'presence') return;
+
+      const w = res.windows && res.windows[adm.shift];
+      const counts = res.counts[adm.shift] || { listed: 0, punched: 0 };
+      const auto = !!(w && w.autoRefreshNow);
+
+      document.getElementById('admPresStamp').textContent =
+        'Updated ' + res.nowHhmm + (auto ? ' · auto-refreshing until ' + w.autoRefreshUntil : ' · tap Refresh for latest');
+
+      let html;
+
+      if (!res.listed) {
+        html = '<div class="adm-empty">The ' + adm.shift + ' list appears about an hour before the shift starts' +
+          (w ? ' (' + w.start + ')' : '') + '.</div>';
+      } else {
+        const notIn = counts.listed - counts.punched;
+        html = '<div class="adm-card"><div class="adm-line"><div><div class="adm-v">' + counts.punched +
+          '<span>/ ' + counts.listed + ' punched in</span></div></div>' +
+          '<span class="adm-pill ' + (notIn ? 'red' : 'green') + '">' + notIn + ' not in</span></div></div>';
+
+        html += res.people.map(function(p) {
+          const isIn = p.status === 'Punched In';
+          return '<button type="button" class="adm-card adm-tap" data-emp="' + admEsc(p.userId) + '">' +
+            '<div class="adm-line"><span class="adm-name">' + admEsc(p.name || p.userId) + '</span>' +
+            '<span class="adm-pill ' + (isIn ? 'green' : 'red') + '">' + (isIn ? 'In ' + admEsc(p.punchedAt) : 'Not in') + '</span></div>' +
+            '<div class="adm-mut">' + admEsc(p.userId) + (p.room ? ' · ' + admEsc(p.room) : '') + '</div></button>';
+        }).join('');
+      }
+
+      document.getElementById('admPresList').innerHTML = html;
+
+      /* Punch-in data is the one thing that refreshes on its own, and only
+         from the shift start until two hours after it. */
+      if (auto) {
+        adm.timer = setTimeout(function() {
+          if (adm.tab === 'presence' && !document.getElementById('admOverlay').classList.contains('hidden')) admPresence();
+        }, 30000);
+      }
+
+    } catch (err) {
+      const list = document.getElementById('admPresList');
+      if (list) list.innerHTML = '<div class="adm-empty">Could not load the list.</div>';
+      admFail(err);
+    }
+
+  }
+
+  /* ---------- Employee sheet ---------- */
+
+  async function admEmployee(userId) {
+
+    admOpenSheet('<div class="adm-empty">Loading&hellip;</div>');
+
+    try {
+
+      const r = await admCall('adminEmployeeProfile', { userId: userId });
+      const p = r.profile;
+
+      function mini(items, fn, empty) {
+        return items.length ? items.map(function(x) { return '<div class="adm-mini">' + fn(x) + '</div>'; }).join('') : '<div class="adm-mut">' + empty + '</div>';
+      }
+
+      const pillClass = p.status.toLowerCase() === 'active' ? 'green' : 'red';
+
+      admOpenSheet(
+        '<div class="adm-line"><h3>' + admEsc(p.name || p.userId) + '</h3><button type="button" class="adm-icon-btn" data-sheet-close="1">&#10005;</button></div>' +
+        '<div class="adm-mut">' + admEsc(p.userId) + ' · ' + admEsc(p.gmail) + '</div>' +
+        '<div class="adm-mt"><span class="adm-pill ' + pillClass + '">' + admEsc(p.status) + '</span> ' +
+        '<span class="adm-pill blue">' + admEsc(p.shift || 'No shift') + '</span> ' +
+        (p.isSupervisor ? '<span class="adm-pill amber">Supervisor</span> ' : '') +
+        (r.today ? '<span class="adm-pill ' + (r.today.status === 'Punched In' ? 'green' : 'red') + '">Today: ' +
+          admEsc(r.today.status) + (r.today.punchedAt ? ' ' + admEsc(r.today.punchedAt) : '') + '</span>' : '') + '</div>' +
+        '<div class="adm-mut adm-mt">Weekoff: ' + admEsc(p.weekoff || 'none') + ' · Joined: ' + admEsc(p.joined || 'not set') +
+        (p.room ? ' · Room: ' + admEsc(p.room) : '') + '</div>' +
+        (r.statusNote ? '<div class="adm-mut adm-mt">Status note: ' + admEsc(r.statusNote.reason) + '</div>' : '') +
+
+        '<details open><summary>Penalties, last 45 days (' + r.penalties.length + ')</summary>' +
+        mini(r.penalties, function(x) {
+          return '<b>' + admEsc(x.type) + '</b> · ' + admNiceDate(x.date) + ' · ' +
+            (x.state === 'Full' ? admMoney(x.current) : '<s>' + admMoney(x.original) + '</s> ' + admMoney(x.current) + ' (' + x.state + ')');
+        }, 'None.') +
+        '<div class="adm-mt"><button type="button" class="adm-btn alt block" data-pen-user="' + admEsc(p.userId) + '">Open in Penalties</button></div></details>' +
+
+        '<details><summary>Leave and resignation</summary>' +
+        mini(r.leaves, function(x) { return admNiceDate(x.start) + (x.end !== x.start ? ' – ' + admNiceDate(x.end) : '') + ' · ' + admEsc(x.type) + ' · ' + admEsc(x.status); }, 'No leave applications.') +
+        mini(r.longLeaves, function(x) { return 'Long leave ' + admNiceDate(x.start) + ' – ' + admNiceDate(x.end) + ' · ' + admEsc(x.status); }, 'No long leave.') +
+        mini(r.resignations, function(x) { return 'Resignation ' + admNiceDate(x.date) + ' · ' + admEsc(x.status); }, 'No resignation.') +
+        '</details>' +
+
+        '<details><summary>Recent punch-ins</summary>' +
+        mini(r.punches, function(x) { return admNiceDate(x.date) + ' · ' + admEsc(x.time) + ' · ' + admEsc(x.shift); }, 'No punches on record.') +
+        '</details>'
+      );
+
+    } catch (err) {
+      admCloseSheet();
+      admFail(err);
+    }
+
+  }
+
+  /* ---------- Penalties ---------- */
+
+  const ADM_PENALTY_TYPES = ['Late Punch', 'Uninformed Leave', 'Uninformed Excess', 'Attendance Not Marked', 'Leave Application', 'Resignation', 'Long Leave'];
+
+  function admPenalties() {
+
+    const p = adm.pen;
+
+    if (!p.from) {
+      p.to = admDateKey(new Date());
+      p.from = admAddDays(p.to, -30);
+    }
+
+    admBody(
+      '<div class="adm-card">' +
+      '<input id="admPenQ" class="adm-input" type="search" placeholder="User ID or name" autocomplete="off" value="' + admEsc(p.q) + '">' +
+      '<div class="adm-row2"><input id="admPenFrom" type="date" class="adm-input" value="' + admEsc(p.from) + '" aria-label="From date">' +
+      '<input id="admPenTo" type="date" class="adm-input" value="' + admEsc(p.to) + '" aria-label="To date"></div>' +
+      '<select id="admPenType" class="adm-select adm-mt"><option value="">All penalty types</option>' +
+      ADM_PENALTY_TYPES.map(function(t) { return '<option' + (p.type === t ? ' selected' : '') + '>' + t + '</option>'; }).join('') +
+      '</select>' +
+      '<button type="button" class="adm-btn block adm-mt" data-pen-search="1">Search</button></div>' +
+      '<div id="admPenResults"></div>'
+    );
+
+    admPenSearch();
+
+  }
+
+  async function admPenSearch() {
+
+    const p = adm.pen;
+    const box = document.getElementById('admPenResults');
+    if (!box) return;
+
+    p.q = document.getElementById('admPenQ').value.trim();
+    p.from = document.getElementById('admPenFrom').value;
+    p.to = document.getElementById('admPenTo').value;
+    p.type = document.getElementById('admPenType').value;
+    p.selected = {};
+    admPenBar();
+
+    box.innerHTML = '<div class="adm-empty">Searching&hellip;</div>';
+
+    try {
+
+      const res = await admCall('adminSearchPenalties', {
+        q: p.q,
+        dateFrom: p.from,
+        dateTo: p.to,
+        types: p.type ? [p.type] : []
+      });
+
+      if (adm.tab !== 'penalties') return;
+
+      p.items = res.items;
+      p.cap = res.bulkCap || 10;
+
+      const canWrite = adm.access && adm.access.canWrite;
+
+      box.innerHTML =
+        '<div class="adm-h">' + res.total + ' penalt' + (res.total === 1 ? 'y' : 'ies') +
+        ' · ' + admMoney(res.originalTotal) + (res.currentTotal !== res.originalTotal ? ' → ' + admMoney(res.currentTotal) : '') + '</div>' +
+        (res.truncated ? '<div class="adm-mut" style="margin:0 2px 8px">Showing the first ' + res.items.length + '. Narrow the dates to see the rest.</div>' : '') +
+        (res.items.length ? res.items.map(function(x) { return admPenCard(x, canWrite); }).join('') : '<div class="adm-empty">No penalties match.</div>');
+
+    } catch (err) {
+      box.innerHTML = '<div class="adm-empty">Could not search.</div>';
+      admFail(err);
+    }
+
+  }
+
+  function admPenCard(x, canWrite) {
+
+    const stateClass = x.state === 'Waived' ? 'green' : (x.state === 'Full' ? 'red' : 'amber');
+
+    return '<div class="adm-card adm-pick">' +
+      (canWrite ? '<input type="checkbox" data-pick="' + admEsc(x.key) + '" aria-label="Select">' : '') +
+      '<div class="adm-main">' +
+      '<div class="adm-line"><button type="button" class="adm-linkish" data-emp="' + admEsc(x.userId) + '">' + admEsc(x.name || x.userId) + '</button>' +
+      '<span class="adm-pill ' + stateClass + '">' + admEsc(x.state) + '</span></div>' +
+      '<div class="adm-mut">' + admEsc(x.type) + ' · ' + admNiceDate(x.date) + ' · ' + admEsc(x.userId) + '</div>' +
+      '<div class="adm-mt"><b>' + (x.current === x.original ? admMoney(x.current) : '<s>' + admMoney(x.original) + '</s> ' + admMoney(x.current)) + '</b></div>' +
+      (x.reason ? '<div class="adm-mut">' + admEsc(x.state) + (x.changedBy ? ' by ' + admEsc(x.changedBy) : '') + ': ' + admEsc(x.reason) + '</div>' : '') +
+      '</div></div>';
+
+  }
+
+  function admPenSelectedItems() {
+    return Object.keys(adm.pen.selected).map(function(k) { return adm.pen.selected[k]; });
+  }
+
+  function admPenBar() {
+
+    const bar = document.getElementById('admBar');
+    const items = admPenSelectedItems();
+
+    if (!items.length || adm.tab !== 'penalties') {
+      bar.classList.add('hidden');
+      return;
+    }
+
+    let total = 0;
+    items.forEach(function(x) { total += x.current; });
+
+    document.getElementById('admBarInfo').innerHTML =
+      '<b>' + items.length + ' / ' + adm.pen.cap + ' selected</b><span>' + admMoney(total) + ' now</span>';
+
+    bar.querySelector('[data-bar="reestablish"]').disabled =
+      items.some(function(x) { return x.state === 'Full'; });
+
+    bar.classList.remove('hidden');
+
+  }
+
+  function admPenPick(checkbox) {
+
+    const key = checkbox.getAttribute('data-pick');
+    const item = adm.pen.items.filter(function(x) { return x.key === key; })[0];
+    if (!item) return;
+
+    if (checkbox.checked) {
+      if (admPenSelectedItems().length >= adm.pen.cap) {
+        checkbox.checked = false;
+        admToast('You can change up to ' + adm.pen.cap + ' at a time.', true);
+        return;
+      }
+      adm.pen.selected[key] = item;
+    } else {
+      delete adm.pen.selected[key];
+    }
+
+    admPenBar();
+
+  }
+
+  function admPenConfirm(action) {
+
+    const items = admPenSelectedItems();
+    if (!items.length) return;
+
+    let now = 0;
+    let full = 0;
+    let minOriginal = Infinity;
+
+    items.forEach(function(x) {
+      now += x.current;
+      full += x.original;
+      if (x.original < minOriginal) minOriginal = x.original;
+    });
+
+    adm.requestId = admNewId();
+
+    const title = action === 'waive' ? 'Waive' : (action === 'reduce' ? 'Reduce' : 'Reestablish');
+    const plural = items.length === 1 ? 'penalty' : 'penalties';
+
+    admOpenSheet(
+      '<div class="adm-line"><h3>' + title + ' ' + items.length + ' ' + plural + '?</h3><button type="button" class="adm-icon-btn" data-sheet-close="1">&#10005;</button></div>' +
+      '<div class="adm-mut">Now ' + admMoney(now) + ' → <b id="admAfter">' +
+      (action === 'waive' ? admMoney(0) : (action === 'reestablish' ? admMoney(full) : '—')) + '</b></div>' +
+      (action === 'reduce'
+        ? '<div class="adm-mt"><label class="adm-mut">Reduce each selected penalty to (₹, below ' + admMoney(minOriginal) + ')</label>' +
+          '<input id="admReduceAmt" class="adm-input adm-mt" type="number" min="1" inputmode="numeric"></div>'
+        : '') +
+      '<div class="adm-mt">' + items.slice(0, 10).map(function(x) {
+        return '<div class="adm-mini">' + admEsc(x.name || x.userId) + ' · ' + admEsc(x.type) + ' · ' + admNiceDate(x.date) + ' · ' + admMoney(x.current) + '</div>';
+      }).join('') + '</div>' +
+      '<textarea id="admReason" class="adm-textarea adm-mt" placeholder="Reason (required, kept in the audit log)"></textarea>' +
+      '<div id="admSheetMsg" class="adm-bad adm-mt"></div>' +
+      '<div class="adm-row2"><button type="button" class="adm-btn alt" data-sheet-close="1">Cancel</button>' +
+      '<button type="button" id="admConfirmBtn" class="adm-btn" data-confirm-pen="' + action + '" data-min="' + minOriginal + '">' + title + '</button></div>'
+    );
+
+  }
+
+  async function admPenSubmit(action, minOriginal) {
+
+    if (adm.busy) return;
+
+    const reason = document.getElementById('admReason').value.trim();
+    const msg = document.getElementById('admSheetMsg');
+    let amount = null;
+
+    if (reason.length < 3) { msg.textContent = 'Please give a reason.'; return; }
+
+    if (action === 'reduce') {
+      amount = Number(document.getElementById('admReduceAmt').value);
+      if (!isFinite(amount) || amount <= 0 || amount >= minOriginal) {
+        msg.textContent = 'Enter an amount above 0 and below ' + admMoney(minOriginal) + '.';
+        return;
+      }
+    }
+
+    adm.busy = true;
+    msg.textContent = '';
+
+    const btn = document.getElementById('admConfirmBtn');
+    btn.disabled = true;
+    btn.textContent = 'Working…';
+
+    try {
+
+      const res = await admCall('adminPenaltyAction', {
+        requestId: adm.requestId,
+        action: action,
+        amount: amount,
+        reason: reason,
+        items: Object.keys(adm.pen.selected)
+      });
+
+      adm.requestId = null;
+      admCloseSheet();
+      admToast(res.message || 'Done.');
+      admPenSearch();
+
+    } catch (err) {
+
+      adm.busy = false;
+      btn.disabled = false;
+      btn.textContent = action === 'waive' ? 'Waive' : (action === 'reduce' ? 'Reduce' : 'Reestablish');
+
+      msg.textContent = err.message + (err.failures && err.failures.length
+        ? ' ' + err.failures.map(function(f) { return f.message; }).join(' ')
+        : '');
+
+    }
+
+  }
+
+  /* ---------- Workforce ---------- */
+
+  async function admWorkforce() {
+
+    admBody(
+      '<div class="adm-seg">' + ['Total', 'Day', 'Night'].map(function(s) {
+        return '<button type="button" data-wf-shift="' + s + '"' + (adm.wfShift === s ? ' class="active"' : '') + '>' + s + '</button>';
+      }).join('') + '</div><div id="admWfBox"><div class="adm-empty">Loading&hellip;</div></div>'
+    );
+
+    try {
+
+      const res = await admCall('adminWorkforceSummary', { shift: adm.wfShift });
+      if (adm.tab !== 'workforce') return;
+
+      const a = res.accuracy;
+
+      let html = a.daysMeasured
+        ? '<div class="adm-card"><div class="adm-k">Forecast accuracy</div><div class="adm-sub">Over the last <b>' + a.daysMeasured +
+          '</b> measured days it missed by about <b>' + a.meanAbsError + '</b> people on average (' +
+          (a.meanError > 0 ? 'ran ' + a.meanError + ' under' : (a.meanError < 0 ? 'ran ' + Math.abs(a.meanError) + ' over' : 'no lean')) + ').</div></div>'
+        : '<div class="adm-card"><div class="adm-sub">Accuracy appears once days have both an expectation and a final count.</div></div>';
+
+      html += '<div class="adm-wf head" style="padding:0 10px 4px"><span>Date</span><span>Sched</span><span>Expect</span><span>Final</span><span>Miss</span></div>';
+
+      html += res.rows.map(function(r) {
+
+        const isToday = r.date === res.today;
+        const isFuture = r.date > res.today;
+        const miss = r.error === null ? '—' : (r.error > 0 ? '+' + r.error : String(r.error));
+
+        return '<div class="adm-wfrow' + (isToday ? ' today' : '') + (isFuture ? ' future' : '') + '" data-wf="1"' + (isToday ? ' id="admWfToday"' : '') + '>' +
+          '<div class="adm-wf"><span><b>' + admEsc(r.day.slice(0, 3)) + '</b> ' + admNiceDate(r.date) + '</span>' +
+          '<span>' + r.scheduled + '</span><span><b>' + r.expected + '</b></span>' +
+          '<span>' + (r.final === null ? '—' : r.final) + '</span>' +
+          '<span class="' + (r.error !== null && Math.abs(r.error) >= 5 ? 'adm-bad' : '') + '">' + miss + '</span></div>' +
+          '<div class="adm-wfmore" style="display:none">' +
+          (r.holiday ? '<span class="adm-pill amber">Holiday: ' + admEsc(r.holiday) + '</span> ' : '') +
+          '<span class="adm-pill">' + admEsc(r.type) + '</span><br>' +
+          'On leave (filed): ' + r.onLeaveKnown + ' · Expected late leave: ' + r.predLateLeave +
+          ' · Expected uninformed: ' + r.predUninformed + ' · Expected new joinees: ' + r.predNewJoinees + '</div></div>';
+
+      }).join('');
+
+      document.getElementById('admWfBox').innerHTML = html;
+
+      const today = document.getElementById('admWfToday');
+      if (today) today.scrollIntoView({ block: 'center' });
+
+    } catch (err) {
+      const box = document.getElementById('admWfBox');
+      if (box) box.innerHTML = '<div class="adm-empty">Could not load.</div>';
+      admFail(err);
+    }
+
+  }
+
+  /* ---------- Approvals ---------- */
+
+  const admApItems = {};
+
+  async function admApprovals() {
+
+    admBody(
+      '<div class="adm-seg">' +
+      '<button type="button" data-ap-kind="resignation"' + (adm.apKind === 'resignation' ? ' class="active"' : '') + '>Resignations</button>' +
+      '<button type="button" data-ap-kind="longLeave"' + (adm.apKind === 'longLeave' ? ' class="active"' : '') + '>Long leaves</button></div>' +
+      '<div class="adm-seg">' +
+      '<button type="button" data-ap-status="Pending"' + (adm.apStatus === 'Pending' ? ' class="active"' : '') + '>Pending</button>' +
+      '<button type="button" data-ap-status="All"' + (adm.apStatus === 'All' ? ' class="active"' : '') + '>All</button></div>' +
+      '<div id="admApBox"><div class="adm-empty">Loading&hellip;</div></div>'
+    );
+
+    try {
+
+      const res = await admCall('adminListApprovals', { kind: adm.apKind, status: adm.apStatus });
+      if (adm.tab !== 'approvals') return;
+
+      const canWrite = adm.access && adm.access.canWrite;
+      const isResign = adm.apKind === 'resignation';
+
+      Object.keys(admApItems).forEach(function(k) { delete admApItems[k]; });
+
+      const html = res.items.length
+        ? res.items.map(function(x) {
+
+            admApItems[x.applicationId] = x;
+
+            const s = x.status.toLowerCase();
+            const cls = s === 'pending' ? 'amber' : ((s === 'approved' || s === 'accepted') ? 'green' : 'red');
+            const approvedLike = s === 'approved' || s === 'accepted';
+
+            let buttons = '';
+
+            if (canWrite) {
+              if (s === 'pending') {
+                buttons = '<button type="button" class="adm-btn ok" data-decide="approve" data-app="' + admEsc(x.applicationId) + '">Approve</button>' +
+                  '<button type="button" class="adm-btn warn" data-decide="reject" data-app="' + admEsc(x.applicationId) + '">Reject</button>';
+              } else if (approvedLike) {
+                buttons = '<button type="button" class="adm-btn warn" data-decide="revoke" data-app="' + admEsc(x.applicationId) + '">Revoke approval</button>';
+              } else if (s === 'rejected') {
+                buttons = '<button type="button" class="adm-btn ok" data-decide="approve" data-app="' + admEsc(x.applicationId) + '">Approve instead</button>';
+              }
+            }
+
+            return '<div class="adm-card">' +
+              '<div class="adm-line"><button type="button" class="adm-linkish" data-emp="' + admEsc(x.userId) + '">' + admEsc(x.name || x.userId) + '</button>' +
+              '<span class="adm-pill ' + cls + '">' + admEsc(x.status) + '</span></div>' +
+              '<div class="adm-mut">' + admEsc(x.userId) + ' · applied ' + admEsc(x.appliedAt) + '</div>' +
+              '<div class="adm-mt">' + (isResign
+                ? 'Resignation date <b>' + admNiceDate(x.startDate) + '</b>'
+                : '<b>' + admNiceDate(x.startDate) + ' – ' + admNiceDate(x.endDate) + '</b> (' + x.days + ' days), back ' + admNiceDate(x.returnDate)) + '</div>' +
+              '<div class="adm-mut">' + admEsc(x.reasonCategory) + (x.noticeStatus ? ' · ' + admEsc(x.noticeStatus) : '') +
+              (x.penalty ? ' · penalty ' + admMoney(x.penalty) : '') + '</div>' +
+              (x.detail ? '<div class="adm-mt" style="font-size:14px">' + admEsc(x.detail.length > 220 ? x.detail.slice(0, 220) + '…' : x.detail) + '</div>' : '') +
+              (x.remark ? '<div class="adm-mut adm-mt">Remark: ' + admEsc(x.remark) + (x.processedBy ? ' (' + admEsc(x.processedBy) + ', ' + admEsc(x.processedAt) + ')' : '') + '</div>' : '') +
+              (buttons ? '<div class="adm-row2">' + buttons + '</div>' : '') +
+              '</div>';
+
+          }).join('')
+        : '<div class="adm-empty">Nothing ' + (adm.apStatus === 'Pending' ? 'waiting for a decision.' : 'here yet.') + '</div>';
+
+      document.getElementById('admApBox').innerHTML = html;
+
+    } catch (err) {
+      const box = document.getElementById('admApBox');
+      if (box) box.innerHTML = '<div class="adm-empty">Could not load.</div>';
+      admFail(err);
+    }
+
+  }
+
+  function admDecideOpen(decision, applicationId) {
+
+    const x = admApItems[applicationId];
+    if (!x) return;
+
+    adm.requestId = admNewId();
+
+    const needRemark = decision !== 'approve';
+    const label = decision === 'approve' ? 'Approve' : (decision === 'reject' ? 'Reject' : 'Revoke approval of');
+    const what = adm.apKind === 'resignation' ? 'resignation' : 'long leave';
+
+    admOpenSheet(
+      '<div class="adm-line"><h3>' + label + ' ' + what + '?</h3><button type="button" class="adm-icon-btn" data-sheet-close="1">&#10005;</button></div>' +
+      '<div class="adm-mut">' + admEsc(x.name || x.userId) + ' · ' + admEsc(x.userId) + '</div>' +
+      (decision !== 'approve' ? '<div class="adm-mut adm-mt">The application becomes <b>Rejected</b>; the employee can apply again.</div>' : '') +
+      '<textarea id="admRemark" class="adm-textarea adm-mt" placeholder="' + (needRemark ? 'Remark (required)' : 'Remark (optional)') + '"></textarea>' +
+      '<div id="admSheetMsg" class="adm-bad adm-mt"></div>' +
+      '<div class="adm-row2"><button type="button" class="adm-btn alt" data-sheet-close="1">Cancel</button>' +
+      '<button type="button" id="admConfirmBtn" class="adm-btn ' + (decision === 'approve' ? 'ok' : 'warn') + '" data-confirm-decide="' + decision + '" data-app="' + admEsc(applicationId) + '">' +
+      (decision === 'approve' ? 'Approve' : (decision === 'reject' ? 'Reject' : 'Revoke')) + '</button></div>'
+    );
+
+  }
+
+  async function admDecideSubmit(decision, applicationId) {
+
+    if (adm.busy) return;
+
+    const remark = document.getElementById('admRemark').value.trim();
+    const msg = document.getElementById('admSheetMsg');
+
+    if (decision !== 'approve' && remark.length < 3) { msg.textContent = 'Please add a remark.'; return; }
+
+    adm.busy = true;
+    const btn = document.getElementById('admConfirmBtn');
+    btn.disabled = true;
+
+    try {
+
+      const res = await admCall('adminDecideApproval', {
+        requestId: adm.requestId,
+        kind: adm.apKind,
+        applicationId: applicationId,
+        decision: decision,
+        remark: remark
+      });
+
+      adm.requestId = null;
+      admCloseSheet();
+      admToast(res.message || 'Done.');
+      admApprovals();
+
+    } catch (err) {
+      adm.busy = false;
+      btn.disabled = false;
+      msg.textContent = err.message;
+    }
+
+  }
+
+  /* ---------- wiring ---------- */
+
+  function admBodyClick(e) {
+
+    const t = e.target;
+    let el;
+
+    if ((el = t.closest('[data-emp]'))) return admEmployee(el.getAttribute('data-emp'));
+
+    if ((el = t.closest('[data-goto]'))) {
+      const shift = el.getAttribute('data-shift');
+      if (shift) adm.shift = shift;
+      return admShowTab(el.getAttribute('data-goto'));
+    }
+
+    if ((el = t.closest('[data-shift-pick]'))) { adm.shift = el.getAttribute('data-shift-pick'); return admPresence(); }
+    if (t.closest('[data-refresh]')) return admPresence();
+    if (t.closest('[data-pen-search]')) return admPenSearch();
+    if ((el = t.closest('[data-wf-shift]'))) { adm.wfShift = el.getAttribute('data-wf-shift'); return admWorkforce(); }
+    if ((el = t.closest('[data-ap-kind]'))) { adm.apKind = el.getAttribute('data-ap-kind'); return admApprovals(); }
+    if ((el = t.closest('[data-ap-status]'))) { adm.apStatus = el.getAttribute('data-ap-status'); return admApprovals(); }
+    if ((el = t.closest('[data-decide]'))) return admDecideOpen(el.getAttribute('data-decide'), el.getAttribute('data-app'));
+
+    if ((el = t.closest('[data-wf]'))) {
+      const more = el.querySelector('.adm-wfmore');
+      if (more) more.style.display = more.style.display === 'none' ? 'block' : 'none';
+    }
+
+  }
+
+  function admInit_() {
+
+    const openBtn = document.getElementById('adminOpenBtn');
+    if (openBtn) openBtn.addEventListener('click', admOpen);
+
+    document.getElementById('admClose').addEventListener('click', admClose);
+
+    document.getElementById('admTabs').addEventListener('click', function(e) {
+      const b = e.target.closest('button[data-tab]');
+      if (b) admShowTab(b.getAttribute('data-tab'));
+    });
+
+    const body = document.getElementById('admBody');
+
+    body.addEventListener('click', admBodyClick);
+
+    body.addEventListener('change', function(e) {
+      if (e.target.matches('input[data-pick]')) admPenPick(e.target);
+    });
+
+    let searchTimer = null;
+
+    body.addEventListener('input', function(e) {
+      if (e.target.id !== 'admEmpQ') return;
+      clearTimeout(searchTimer);
+      const value = e.target.value;
+      searchTimer = setTimeout(function() { admEmpSearch(value); }, 300);
+    });
+
+    body.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && e.target.id === 'admPenQ') admPenSearch();
+    });
+
+    document.getElementById('admBar').addEventListener('click', function(e) {
+      const b = e.target.closest('[data-bar]');
+      if (b && !b.disabled) admPenConfirm(b.getAttribute('data-bar'));
+    });
+
+    document.getElementById('admSheetWrap').addEventListener('click', function(e) {
+
+      if (e.target.id === 'admSheetWrap' || e.target.closest('[data-sheet-close]')) return admCloseSheet();
+
+      let el;
+
+      if ((el = e.target.closest('[data-pen-user]'))) {
+        adm.pen.q = el.getAttribute('data-pen-user');
+        admCloseSheet();
+        return admShowTab('penalties');
+      }
+
+      if ((el = e.target.closest('[data-confirm-pen]'))) {
+        return admPenSubmit(el.getAttribute('data-confirm-pen'), Number(el.getAttribute('data-min')));
+      }
+
+      if ((el = e.target.closest('[data-confirm-decide]'))) {
+        return admDecideSubmit(el.getAttribute('data-confirm-decide'), el.getAttribute('data-app'));
+      }
+
+    });
+
+  }
+
+  admInit_();
+
 
 </script>
 
