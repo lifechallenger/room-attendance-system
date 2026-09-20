@@ -984,6 +984,13 @@ body.adm-no-employee #weekoffInfo { display: none !important; }
 .ct-label { display: block; font-weight: 600; margin: 10px 0 6px; }
 .ct-summary { background: #f1f3f4; border-radius: 8px; padding: 10px; margin-bottom: 6px; font-size: 14px; }
 .ct-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+
+/* ---- employee tool buttons: two full-width rows, no gaps ---- */
+.employee-tools-row.row-main { grid-template-columns: 1fr 1fr 42px; }
+.employee-tools-row.row-two { grid-template-columns: 1fr 1fr; margin-top: 8px; }
+@media (max-width: 380px) {
+  .employee-tools-row.row-main { grid-template-columns: 1fr 1fr 40px; }
+}
 </style>
 </head>
 
@@ -1043,17 +1050,11 @@ body.adm-no-employee #weekoffInfo { display: none !important; }
 
 
     <div id="employeeTools" class="employee-tools">
-      <div class="employee-tools-row">
+      <div class="employee-tools-row row-main">
         <button class="secondary employee-tool-btn"
                 type="button"
                 onclick="openLeaveModal()">
           Apply Leave
-        </button>
-
-        <button class="secondary employee-tool-btn"
-                type="button"
-                onclick="openResignationModal()">
-          Resignation
         </button>
 
         <button class="secondary employee-tool-btn"
@@ -1070,8 +1071,19 @@ body.adm-no-employee #weekoffInfo { display: none !important; }
           &#9432;
         </button>
       </div>
-      <div class="employee-tools-row" style="margin-top:8px">
-        <button class="secondary employee-tool-btn" type="button" onclick="openContestModal()">Contest a Penalty</button>
+
+      <div class="employee-tools-row row-two">
+        <button class="secondary employee-tool-btn"
+                type="button"
+                onclick="openContestModal()">
+          Contest a Penalty
+        </button>
+
+        <button class="secondary employee-tool-btn"
+                type="button"
+                onclick="openResignationModal()">
+          Resignation
+        </button>
       </div>
     </div>
 
