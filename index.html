@@ -13,7 +13,7 @@
   <meta name="theme-color"
         content="#1a73e8">
 
-  <title>Room Attendance</title>
+  <title>Work Site Attendance</title>
 
   <!-- Google Identity Services -->
   <script src="https://accounts.google.com/gsi/client"
@@ -1008,10 +1008,10 @@ body.adm-no-employee #weekoffInfo { display: none !important; }
 
   <div class="header">
 
-    <h1>Room Attendance</h1>
+    <h1>Work Site Attendance</h1>
 
     <p>
-      Scan the room QR code to record attendance
+      Scan the work site QR code to record attendance
     </p>
 
   </div>
@@ -1105,7 +1105,7 @@ body.adm-no-employee #weekoffInfo { display: none !important; }
        class="card hidden">
 
     <div class="title">
-      2. Scan Room QR Code
+      2. Scan Work Site QR Code
     </div>
 
     <div id="scannerPlaceholder"
@@ -1439,7 +1439,7 @@ body.adm-no-employee #weekoffInfo { display: none !important; }
 
       <li>
         Scan the QR code physically displayed
-        in the room.
+        in the work site.
       </li>
 
       <li>
@@ -1457,7 +1457,7 @@ body.adm-no-employee #weekoffInfo { display: none !important; }
 
 
   <footer>
-    Room Attendance System
+    Work Site Attendance System
   </footer>
 
 </div>
@@ -1639,23 +1639,23 @@ body.adm-no-employee #weekoffInfo { display: none !important; }
 
 
 <!-- =====================================================
-     ROOM ASSIGNMENT REGISTRATION MODAL
+     WORK_SITE ASSIGNMENT REGISTRATION MODAL
      ===================================================== -->
-<div id="roomAssignmentModal"
+<div id="workSiteAssignmentModal"
      class="modal-backdrop"
-     onclick="backdropClose(event,'roomAssignmentModal')">
+     onclick="backdropClose(event,'workSiteAssignmentModal')">
 
   <div class="self-modal">
 
     <div class="modal-header">
-      <h2 class="modal-title">Room Assignment Registration</h2>
+      <h2 class="modal-title">Work Site Assignment Registration</h2>
       <button class="modal-close" type="button"
-              onclick="closeModal('roomAssignmentModal')">&times;</button>
+              onclick="closeModal('workSiteAssignmentModal')">&times;</button>
     </div>
 
     <div class="confirmation-box">
       You are signed in with <b id="assignmentSignedInEmail">your Google account</b>.<br>
-      Enter your User ID and select the room actually assigned to you.
+      Enter your User ID and select the work site actually assigned to you.
       Your Attendance Not Marked penalty eligibility starts from the <b>next calendar day</b>.
     </div>
 
@@ -1666,18 +1666,18 @@ body.adm-no-employee #weekoffInfo { display: none !important; }
     </div>
 
     <div class="form-group">
-      <label class="form-label" for="assignmentRoomId">Assigned room</label>
-      <select id="assignmentRoomId" class="form-control">
-        <option value="">Loading rooms&hellip;</option>
+      <label class="form-label" for="assignmentWorkSiteId">Assigned work site</label>
+      <select id="assignmentWorkSiteId" class="form-control">
+        <option value="">Loading workSites&hellip;</option>
       </select>
-      <div class="form-hint">Select the room you have actually been assigned. This registration is recorded against your signed-in Gmail account.</div>
+      <div class="form-hint">Select the work site you have actually been assigned. This registration is recorded against your signed-in Gmail account.</div>
     </div>
 
     <div id="assignmentMessage" class="form-message"></div>
 
     <div class="modal-actions">
-      <button class="secondary" type="button" onclick="closeModal('roomAssignmentModal')">Cancel</button>
-      <button id="assignmentSubmitButton" class="primary" type="button" onclick="submitRoomAssignmentRegistration()">Register Room</button>
+      <button class="secondary" type="button" onclick="closeModal('workSiteAssignmentModal')">Cancel</button>
+      <button id="assignmentSubmitButton" class="primary" type="button" onclick="submitWorkSiteAssignmentRegistration()">Register Work Site</button>
     </div>
 
   </div>
@@ -1802,15 +1802,15 @@ const APPS_SCRIPT_URL =
   let scannerMode = 'attendance';
 
   // Universal accommodation-registration QR deep link.
-  // Room assignment registration is intentionally NOT exposed as a
+  // Work site assignment registration is intentionally NOT exposed as a
   // home-screen button. The registration dialog is entered only through
-  // the dedicated QR deep link (?action=room-assignment).
-  let roomAssignmentDeepLinkRequested = false;
+  // the dedicated QR deep link (?action=work-site-assignment).
+  let workSiteAssignmentDeepLinkRequested = false;
   try {
-    roomAssignmentDeepLinkRequested =
-      new URLSearchParams(window.location.search).get('action') === 'room-assignment';
+    workSiteAssignmentDeepLinkRequested =
+      new URLSearchParams(window.location.search).get('action') === 'work-site-assignment';
   } catch (e) {
-    roomAssignmentDeepLinkRequested = false;
+    workSiteAssignmentDeepLinkRequested = false;
   }
 
  let backendBridgeTimeoutId = null;
@@ -2035,17 +2035,17 @@ const BACKEND_TIMEOUT_MS = 20000;
     loadSelfServiceBootstrap();
     loadEmployeeSummaryOnly();
     adminCheckAccess_();
-    // Preload the small active-room list in parallel so opening the room
+    // Preload the small active-work site list in parallel so opening the work site
     // assignment form does not wait for a second round trip.
-    preloadRoomAssignmentOptions_().catch(function(error) {
-      console.warn('Room assignment options preload failed:', error);
+    preloadWorkSiteAssignmentOptions_().catch(function(error) {
+      console.warn('Work site assignment options preload failed:', error);
     });
 
-    // QR deep link: after Gmail authentication, open the room-assignment
+    // QR deep link: after Gmail authentication, open the work-site-assignment
     // registration form automatically instead of requiring another tap.
-    if (roomAssignmentDeepLinkRequested) {
+    if (workSiteAssignmentDeepLinkRequested) {
       setTimeout(function() {
-        openRoomAssignmentRegistration();
+        openWorkSiteAssignmentRegistration();
       }, 150);
     }
 
@@ -2216,9 +2216,9 @@ const BACKEND_TIMEOUT_MS = 20000;
   let pendingResignation = null;
   let pendingLongLeave = null;
   let pendingLeaveProof = null;
-  let roomAssignmentRegistered = false;
-  let roomAssignmentOptions = null;
-  let roomAssignmentOptionsPromise = null;
+  let workSiteAssignmentRegistered = false;
+  let workSiteAssignmentOptions = null;
+  let workSiteAssignmentOptionsPromise = null;
 
   function localTodayKey() {
 
@@ -2314,7 +2314,7 @@ const BACKEND_TIMEOUT_MS = 20000;
 
         mergeSelfServiceConfig_(result);
 
-        setRoomAssignmentButtonVisibility_(result.roomAssignmentRegistered);
+        setWorkSiteAssignmentButtonVisibility_(result.workSiteAssignmentRegistered);
         selfServiceBootstrapReady = true;
 
         const tools =
@@ -2856,7 +2856,7 @@ const BACKEND_TIMEOUT_MS = 20000;
       breakdownEl.textContent =
         'Leave: ' + money(summary.leavePenaltyThisMonth) +
         ' · Late punch: ' + money(summary.latePunchPenaltyThisMonth) +
-        ' · Room attendance: ' + money(penaltyBreakdown.attendanceNotMarked || summary.attendanceNotMarkedPenaltyThisMonth || 0) +
+        ' · Work Site attendance: ' + money(penaltyBreakdown.attendanceNotMarked || summary.attendanceNotMarkedPenaltyThisMonth || 0) +
         ' · Uninformed leave: ' + money(penaltyBreakdown.uninformed || 0) +
         ' · Uninformed excess: ' + money(penaltyBreakdown.uninformedExcess || 0);
     }
@@ -4599,7 +4599,7 @@ const BACKEND_TIMEOUT_MS = 20000;
       'resignationHistoryModal',
       'longLeaveModal',
       'contestModal',
-      'roomAssignmentModal'
+      'workSiteAssignmentModal'
     ].forEach(
       function(id) {
         closeModal(id);
@@ -5512,8 +5512,8 @@ const BACKEND_TIMEOUT_MS = 20000;
 
     setScanStatus(
       scannerMode === 'assignment'
-        ? 'Camera active. Scan the room assignment QR code.'
-        : 'Camera active. Point it at the room attendance QR code.',
+        ? 'Camera active. Scan the work site assignment QR code.'
+        : 'Camera active. Point it at the work site attendance QR code.',
       'info'
     );
 
@@ -5660,11 +5660,11 @@ const BACKEND_TIMEOUT_MS = 20000;
     try {
       const scannedUrl = new URL(rawQr);
       if (scannedUrl.origin === window.location.origin &&
-          scannedUrl.searchParams.get('action') === 'room-assignment') {
-        setScanStatus('Room assignment registration QR detected.', 'success');
+          scannedUrl.searchParams.get('action') === 'work-site-assignment') {
+        setScanStatus('Work site assignment registration QR detected.', 'success');
         stopScanner().finally(function() {
-          roomAssignmentDeepLinkRequested = true;
-          openRoomAssignmentRegistration();
+          workSiteAssignmentDeepLinkRequested = true;
+          openWorkSiteAssignmentRegistration();
         });
         return;
       }
@@ -5672,29 +5672,29 @@ const BACKEND_TIMEOUT_MS = 20000;
       // Not a URL; continue with normal QR handling.
     }
 
-    if (rawQr === 'ROOM_ASSIGNMENT_REGISTRATION|PG_ATTENDANCE_V1') {
+    if (rawQr === 'WORK_SITE_ASSIGNMENT_REGISTRATION|PG_ATTENDANCE_V1') {
       if (scannerMode !== 'assignment') {
         scanProcessed = false;
-        setScanStatus('This is the Room Assignment Registration QR. Use Confirm Room Assignment.', 'error');
+        setScanStatus('This is the Work Site Assignment Registration QR. Use Confirm Work Site Assignment.', 'error');
         return;
       }
 
-      setScanStatus('Registration QR detected. Select your assigned room...', 'success');
+      setScanStatus('Registration QR detected. Select your assigned work site...', 'success');
       stopScanner().finally(function() {
-        openRoomAssignmentRegistration();
+        openWorkSiteAssignmentRegistration();
       });
       return;
     }
 
-    if (rawQr.indexOf('ROOM_ASSIGNMENT|') === 0) {
+    if (rawQr.indexOf('WORK_SITE_ASSIGNMENT|') === 0) {
       scanProcessed = false;
-      setScanStatus('Room-specific assignment QR codes are no longer used. Please scan the single Room Assignment Registration QR.', 'error');
+      setScanStatus('Work-site-specific assignment QR codes are no longer used. Please scan the single Work Site Assignment Registration QR.', 'error');
       return;
     }
 
     if (scannerMode === 'assignment') {
       scanProcessed = false;
-      setScanStatus('That is an attendance QR. Please scan the dedicated room assignment QR.', 'error');
+      setScanStatus('That is an attendance QR. Please scan the dedicated work site assignment QR.', 'error');
       return;
     }
 
@@ -5734,13 +5734,13 @@ const BACKEND_TIMEOUT_MS = 20000;
 
     if (
       value.startsWith(
-        'ROOM_ATTENDANCE|'
+        'WORK_SITE_ATTENDANCE|'
       )
     ) {
 
       return value
         .substring(
-          'ROOM_ATTENDANCE|'.length
+          'WORK_SITE_ATTENDANCE|'.length
         )
         .trim();
 
@@ -5940,54 +5940,54 @@ const BACKEND_TIMEOUT_MS = 20000;
 
 
   /* =====================================================
-     ROOM ASSIGNMENT PROOF
+     WORK_SITE ASSIGNMENT PROOF
      ===================================================== */
 
-  function setRoomAssignmentButtonVisibility_(registered) {
-    // Room assignment is QR-entry only; there is deliberately no home-screen
+  function setWorkSiteAssignmentButtonVisibility_(registered) {
+    // Work site assignment is QR-entry only; there is deliberately no home-screen
     // button to show/hide. Keep the registration state for deep-link guards.
-    roomAssignmentRegistered = !!registered;
+    workSiteAssignmentRegistered = !!registered;
   }
 
 
-  function preloadRoomAssignmentOptions_() {
+  function preloadWorkSiteAssignmentOptions_() {
     if (!googleIdToken) return Promise.resolve(null);
-    if (roomAssignmentOptions) return Promise.resolve(roomAssignmentOptions);
-    if (roomAssignmentOptionsPromise) return roomAssignmentOptionsPromise;
+    if (workSiteAssignmentOptions) return Promise.resolve(workSiteAssignmentOptions);
+    if (workSiteAssignmentOptionsPromise) return workSiteAssignmentOptionsPromise;
 
-    roomAssignmentOptionsPromise = selfServiceJsonp('getRoomAssignmentOptions')
+    workSiteAssignmentOptionsPromise = selfServiceJsonp('getWorkSiteAssignmentOptions')
       .then(function(result) {
         if (!result || !result.success) {
-          throw new Error(result && result.message ? result.message : 'Could not load rooms.');
+          throw new Error(result && result.message ? result.message : 'Could not load workSites.');
         }
-        roomAssignmentOptions = result.rooms || [];
-        return roomAssignmentOptions;
+        workSiteAssignmentOptions = result.workSites || [];
+        return workSiteAssignmentOptions;
       })
       .catch(function(error) {
-        roomAssignmentOptionsPromise = null;
+        workSiteAssignmentOptionsPromise = null;
         throw error;
       });
 
-    return roomAssignmentOptionsPromise;
+    return workSiteAssignmentOptionsPromise;
   }
 
 
-  function openRoomAssignmentRegistration() {
+  function openWorkSiteAssignmentRegistration() {
     if (!googleIdToken) {
       showResult(false, 'Authentication Required', 'Please sign in with Google.');
       return;
     }
 
-    if (roomAssignmentRegistered) {
-      showResult(false, 'Room Assignment Already Registered',
-        'A room assignment is already registered for this Google account. Contact HR if your room has changed.');
+    if (workSiteAssignmentRegistered) {
+      showResult(false, 'Work Site Assignment Already Registered',
+        'A work site assignment is already registered for this Google account. Contact HR if your work site has changed.');
       return;
     }
 
-    var modal = document.getElementById('roomAssignmentModal');
+    var modal = document.getElementById('workSiteAssignmentModal');
     var emailEl = document.getElementById('assignmentSignedInEmail');
     var userIdEl = document.getElementById('assignmentUserId');
-    var roomEl = document.getElementById('assignmentRoomId');
+    var workSiteEl = document.getElementById('assignmentWorkSiteId');
     var messageEl = document.getElementById('assignmentMessage');
 
     if (emailEl) emailEl.textContent = document.getElementById('userEmail').textContent || 'your Google account';
@@ -5995,37 +5995,37 @@ const BACKEND_TIMEOUT_MS = 20000;
     if (messageEl) messageEl.textContent = '';
     if (modal) modal.classList.add('show');
 
-    function renderRooms_(rooms) {
-      if (!roomEl) return;
-      roomEl.innerHTML = '<option value="">Select your assigned room</option>' +
-        (rooms || []).map(function(room) {
-          return '<option value="' + escapeHtml(room.roomId) + '">' + escapeHtml(room.roomName) + ' (' + escapeHtml(room.roomId) + ')</option>';
+    function renderWorkSites_(workSites) {
+      if (!workSiteEl) return;
+      workSiteEl.innerHTML = '<option value="">Select your assigned work site</option>' +
+        (workSites || []).map(function(workSite) {
+          return '<option value="' + escapeHtml(workSite.workSiteId) + '">' + escapeHtml(workSite.workSiteName) + ' (' + escapeHtml(workSite.workSiteId) + ')</option>';
         }).join('');
     }
 
-    if (roomAssignmentOptions) {
-      renderRooms_(roomAssignmentOptions);
+    if (workSiteAssignmentOptions) {
+      renderWorkSites_(workSiteAssignmentOptions);
       return;
     }
 
-    if (roomEl) roomEl.innerHTML = '<option value="">Loading rooms&hellip;</option>';
-    preloadRoomAssignmentOptions_()
-      .then(renderRooms_)
+    if (workSiteEl) workSiteEl.innerHTML = '<option value="">Loading workSites&hellip;</option>';
+    preloadWorkSiteAssignmentOptions_()
+      .then(renderWorkSites_)
       .catch(function(error) {
-        if (roomEl) roomEl.innerHTML = '<option value="">Unable to load rooms</option>';
-        if (messageEl) messageEl.textContent = error && error.message ? error.message : 'Could not load rooms.';
+        if (workSiteEl) workSiteEl.innerHTML = '<option value="">Unable to load workSites</option>';
+        if (messageEl) messageEl.textContent = error && error.message ? error.message : 'Could not load workSites.';
       });
   }
 
 
-  function submitRoomAssignmentRegistration() {
+  function submitWorkSiteAssignmentRegistration() {
     if (!googleIdToken) {
       showResult(false, 'Authentication Required', 'Please sign in with Google.');
       return;
     }
 
     var typedUserId = String(document.getElementById('assignmentUserId').value || '').trim();
-    var roomId = String(document.getElementById('assignmentRoomId').value || '').trim();
+    var workSiteId = String(document.getElementById('assignmentWorkSiteId').value || '').trim();
     var messageEl = document.getElementById('assignmentMessage');
     var button = document.getElementById('assignmentSubmitButton');
 
@@ -6033,8 +6033,8 @@ const BACKEND_TIMEOUT_MS = 20000;
       if (messageEl) messageEl.textContent = 'Please enter your User ID.';
       return;
     }
-    if (!roomId) {
-      if (messageEl) messageEl.textContent = 'Please select your assigned room.';
+    if (!workSiteId) {
+      if (messageEl) messageEl.textContent = 'Please select your assigned work site.';
       return;
     }
 
@@ -6042,23 +6042,23 @@ const BACKEND_TIMEOUT_MS = 20000;
       button.disabled = true;
       button.textContent = 'Registering&hellip;';
     }
-    if (messageEl) messageEl.textContent = 'Recording your room assignment...';
+    if (messageEl) messageEl.textContent = 'Recording your work site assignment...';
 
-    selfServiceJsonp('recordRoomAssignment', {
+    selfServiceJsonp('recordWorkSiteAssignment', {
       typedUserId: typedUserId,
-      roomId: roomId
+      workSiteId: workSiteId
     })
       .then(function(result) {
         if (result && result.success) {
-          setRoomAssignmentButtonVisibility_(true);
-          closeModal('roomAssignmentModal');
+          setWorkSiteAssignmentButtonVisibility_(true);
+          closeModal('workSiteAssignmentModal');
           scannerMode = 'attendance';
-          showResult(true, 'Room Assignment Registered',
-            'Room: ' + (result.roomName || roomId) + '. Attendance Not Marked penalty eligibility starts from ' +
+          showResult(true, 'Work Site Assignment Registered',
+            'Work Site: ' + (result.workSiteName || workSiteId) + '. Attendance Not Marked penalty eligibility starts from ' +
             (result.effectiveFromDate || 'the next calendar day') + '.');
           return;
         }
-        if (messageEl) messageEl.textContent = result && result.message ? result.message : 'Room assignment could not be registered.';
+        if (messageEl) messageEl.textContent = result && result.message ? result.message : 'Work site assignment could not be registered.';
       })
       .catch(function(error) {
         if (messageEl) messageEl.textContent = error && error.message ? error.message : 'Could not reach the backend.';
@@ -6066,7 +6066,7 @@ const BACKEND_TIMEOUT_MS = 20000;
       .finally(function() {
         if (button) {
           button.disabled = false;
-          button.textContent = 'Register Room';
+          button.textContent = 'Register Work Site';
         }
       });
   }
@@ -6094,7 +6094,7 @@ const BACKEND_TIMEOUT_MS = 20000;
       showResult(
         false,
         'QR Code Missing',
-        'Please scan the room QR code again.'
+        'Please scan the work site QR code again.'
       );
 
       return;
@@ -6174,7 +6174,7 @@ const BACKEND_TIMEOUT_MS = 20000;
    */
 
   function jsonpCallbackName() {
-    return '__roomAttendanceCallback_' +
+    return '__work siteAttendanceCallback_' +
       Date.now() + '_' +
       Math.random().toString(36).slice(2);
   }
@@ -6256,7 +6256,7 @@ const BACKEND_TIMEOUT_MS = 20000;
 
         /*
          * On a successful scan, show only the tick and title --
-         * no user name, room, distance, or timestamp. Those are
+         * no user name, work site, distance, or timestamp. Those are
          * already recorded in the Attendance sheet; showing them
          * on-screen serves no purpose and exposes another
          * person's details to whoever glances at the phone next.
@@ -6973,7 +6973,7 @@ const BACKEND_TIMEOUT_MS = 20000;
           return '<button type="button" class="adm-card adm-tap" data-emp="' + admEsc(p.userId) + '">' +
             '<div class="adm-line"><span class="adm-name">' + admEsc(p.name || p.userId) + '</span>' +
             '<span class="adm-pill ' + (isIn ? 'green' : 'red') + '">' + (isIn ? 'In ' + admEsc(p.punchedAt) : 'Not in') + '</span></div>' +
-            '<div class="adm-mut">' + admEsc(p.userId) + (p.room ? ' · ' + admEsc(p.room) : '') + '</div></button>';
+            '<div class="adm-mut">' + admEsc(p.userId) + (p.workSite ? ' · ' + admEsc(p.workSite) : '') + '</div></button>';
         }).join('');
 
         const extras = (res.extras || []).filter(function(e) { return e.shift === adm.shift; });
@@ -7046,7 +7046,7 @@ const BACKEND_TIMEOUT_MS = 20000;
         (r.today ? '<span class="adm-pill ' + (r.today.status === 'Punched In' ? 'green' : 'red') + '">Today: ' +
           admEsc(r.today.status) + (r.today.punchedAt ? ' ' + admEsc(r.today.punchedAt) : '') + '</span>' : '') + '</div>' +
         '<div class="adm-mut adm-mt">Weekoff: ' + admEsc(p.weekoff || 'none') + ' · Joined: ' + admEsc(p.joined || 'not set') +
-        (p.room ? ' · Room: ' + admEsc(p.room) : '') + '</div>' +
+        (p.workSite ? ' · Work Site: ' + admEsc(p.workSite) : '') + '</div>' +
         (r.statusNote ? '<div class="adm-mut adm-mt">Status note: ' + admEsc(r.statusNote.reason) + '</div>' : '') +
         (r.statusNote && r.statusNote.holdUntil && r.statusNote.holdUntil >= today ? '<div class="adm-mut">Automatic status changes are paused until ' + admNiceDate(r.statusNote.holdUntil) + '.</div>' : '') +
         (canWrite ? '<div class="adm-mt">' + statusBtn + '</div><div class="' + (weekoffOn ? 'adm-row2' : 'adm-mt') + '">' + shiftBtn + weekoffBtn + '</div>' : '') +
@@ -7712,7 +7712,7 @@ const BACKEND_TIMEOUT_MS = 20000;
           '<div class="adm-wfmore" style="display:none">' +
           (r.holiday ? '<span class="adm-pill amber">Holiday: ' + admEsc(r.holiday) + '</span> ' : '') +
           '<span class="adm-pill">' + admEsc(r.type) + '</span><br>' +
-          (r.roomAttPrev !== null && r.roomAttPrev !== undefined ? 'Scanned into their room yesterday: <b>' + r.roomAttPrev + '</b><br>' : '') +
+          (r.workSiteAttPrev !== null && r.workSiteAttPrev !== undefined ? 'Scanned into their work site yesterday: <b>' + r.workSiteAttPrev + '</b><br>' : '') +
           'On leave (filed): ' + r.onLeaveKnown + ' · Expected late leave: ' + r.predLateLeave +
           ' · Expected uninformed: ' + r.predUninformed + ' · Expected new joinees: ' + r.predNewJoinees + '</div></div>';
 
