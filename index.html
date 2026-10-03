@@ -2721,6 +2721,14 @@ const BACKEND_TIMEOUT_MS = 20000;
             '.'
           : 'Attendance recorded for today.';
 
+      /* Non-residents also check out; residents check in only. */
+      if (!info.isResident) {
+        el.textContent +=
+          info.checkedOutAtTime
+            ? ' Checked out at ' + info.checkedOutAtTime + '.'
+            : ' Scan again to check out when you leave.';
+      }
+
       return;
 
     }
@@ -6273,7 +6281,9 @@ const BACKEND_TIMEOUT_MS = 20000;
 
         showResult(
           success,
-          success ? 'Attendance Recorded' : 'Attendance Rejected',
+          success
+            ? (result.action === 'checkout' ? 'Checked Out' : 'Attendance Recorded')
+            : 'Attendance Rejected',
           details
         );
 
