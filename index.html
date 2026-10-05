@@ -1655,14 +1655,14 @@ body.adm-no-employee #weekoffInfo { display: none !important; }
 
     <div class="confirmation-box">
       You are signed in with <b id="assignmentSignedInEmail">your Google account</b>.<br>
-      Enter your User ID and select the work site actually assigned to you.
+      Enter your app-registered mobile number and select the work site actually assigned to you.
       Your Attendance Not Marked penalty eligibility starts from the <b>next calendar day</b>.
     </div>
 
     <div class="form-group" style="margin-top:14px;">
-      <label class="form-label" for="assignmentUserId">User ID</label>
-      <input type="text" id="assignmentUserId" class="form-control"
-             autocomplete="off" placeholder="Enter your User ID">
+      <label class="form-label" for="assignmentMobile">Registered mobile number</label>
+      <input type="tel" id="assignmentMobile" class="form-control"
+             inputmode="numeric" autocomplete="tel" placeholder="Enter your app-registered mobile number">
     </div>
 
     <div class="form-group">
@@ -5994,12 +5994,12 @@ const BACKEND_TIMEOUT_MS = 20000;
 
     var modal = document.getElementById('workSiteAssignmentModal');
     var emailEl = document.getElementById('assignmentSignedInEmail');
-    var userIdEl = document.getElementById('assignmentUserId');
+    var mobileEl = document.getElementById('assignmentMobile');
     var workSiteEl = document.getElementById('assignmentWorkSiteId');
     var messageEl = document.getElementById('assignmentMessage');
 
     if (emailEl) emailEl.textContent = document.getElementById('userEmail').textContent || 'your Google account';
-    if (userIdEl) userIdEl.value = '';
+    if (mobileEl) mobileEl.value = '';
     if (messageEl) messageEl.textContent = '';
     if (modal) modal.classList.add('show');
 
@@ -6032,13 +6032,13 @@ const BACKEND_TIMEOUT_MS = 20000;
       return;
     }
 
-    var typedUserId = String(document.getElementById('assignmentUserId').value || '').trim();
+    var typedMobile = String(document.getElementById('assignmentMobile').value || '').trim();
     var workSiteId = String(document.getElementById('assignmentWorkSiteId').value || '').trim();
     var messageEl = document.getElementById('assignmentMessage');
     var button = document.getElementById('assignmentSubmitButton');
 
-    if (!typedUserId) {
-      if (messageEl) messageEl.textContent = 'Please enter your User ID.';
+    if (!typedMobile) {
+      if (messageEl) messageEl.textContent = 'Please enter your registered mobile number.';
       return;
     }
     if (!workSiteId) {
@@ -6053,7 +6053,7 @@ const BACKEND_TIMEOUT_MS = 20000;
     if (messageEl) messageEl.textContent = 'Recording your work site assignment...';
 
     selfServiceJsonp('recordWorkSiteAssignment', {
-      typedUserId: typedUserId,
+      typedMobile: typedMobile,
       workSiteId: workSiteId
     })
       .then(function(result) {
