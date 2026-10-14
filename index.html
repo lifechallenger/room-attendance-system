@@ -9947,6 +9947,8 @@ const BACKEND_TIMEOUT_MS = 20000;
   async function admWorkforce() {
 
     admBody(
+      '<div class="adm-card"><div class="adm-line"><div><b>Add workforce</b><div class="adm-sub">Add a person to Employee Master</div></div>' +
+      '<button type="button" class="adm-btn" style="flex:0 0 auto;width:auto;padding:0 18px" data-wf-add="1">Add</button></div></div>' +
       '<div class="adm-seg">' + ['Total', 'Day', 'Night'].map(function(s) {
         return '<button type="button" data-wf-shift="' + s + '"' + (adm.wfShift === s ? ' class="active"' : '') + '>' + s + '</button>';
       }).join('') + '</div><div id="admWfBox"><div class="adm-empty">Loading&hellip;</div></div>'
@@ -10375,11 +10377,91 @@ const BACKEND_TIMEOUT_MS = 20000;
     }
   }
 
+  /* ---------- Add workforce (Employee Master) ---------- */
+  function admWfSelect(id, options, selected, firstLabel) {
+    return '<select id="' + id + '" class="adm-select">' +
+      (firstLabel !== undefined ? '<option value="">' + admEsc(firstLabel) + '</option>' : '') +
+      options.map(function(o) { return '<option value="' + admEsc(o) + '"' + (o === selected ? ' selected' : '') + '>' + admEsc(o) + '</option>'; }).join('') +
+      '</select>';
+  }
+  function admWfAddOpen() {
+    adm.requestId = admNewId();
+    adm.wfAdded = 0;
+    admOpenSheet(
+      '<div class="adm-line"><h3>Add workforce</h3><button type="button" class="adm-icon-btn" data-sheet-close="1">&#10005;</button></div>' +
+      '<div class="adm-mut adm-mt">Adds one person to Employee Master. Employee ID is already filled there. If the email or mobile number is already in the sheet, nothing is added.</div>' +
+      '<div id="admWfWarn" class="adm-bad adm-mt"></div>' +
+      '<input id="admWfName" class="adm-input adm-mt" type="text" placeholder="Name" autocomplete="off">' +
+      '<input id="admWfGmail" class="adm-input adm-mt" type="email" inputmode="email" placeholder="Awign registered Gmail" autocomplete="off" autocapitalize="off">' +
+      '<input id="admWfMobile" class="adm-input adm-mt" type="tel" inputmode="numeric" placeholder="Mobile number used in the app" autocomplete="off">' +
+      '<div class="adm-h">Shift</div>' + admWfSelect('admWfShift', [], '', 'Loading shifts...') +
+      '<div class="adm-h">Weekoff day</div>' + admWfSelect('admWfWeekoff', ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'], '', 'Not set') +
+      '<div class="adm-h">Supervisor</div>' +
+      '<input id="admWfSupervisor" class="adm-input" type="text" list="admWfSupList" placeholder="Supervisor name" autocomplete="off"><datalist id="admWfSupList"></datalist>' +
+      '<div class="adm-row2">' +
+      '<div><div class="adm-h">Is resident</div>' + admWfSelect('admWfResident', ['No', 'Yes'], 'No') + '</div>' +
+      '<div><div class="adm-h">Is supervisor</div>' + admWfSelect('admWfIsSup', ['No', 'Yes'], 'No') + '</div></div>' +
+      '<div class="adm-h">Status</div>' + admWfSelect('admWfStatus', ['Active', 'Inactive'], 'Active') +
+      '<div id="admSheetMsg" class="adm-bad adm-mt"></div>' +
+      '<div class="adm-row2"><button type="button" class="adm-btn alt" data-sheet-close="1">Close</button>' +
+      '<button type="button" id="admConfirmBtn" class="adm-btn" data-confirm-wfadd="1">Add to Employee Master</button></div>'
+    );
+    admCall('adminWorkforceOptions').then(function(res) {
+      const shift = document.getElementById('admWfShift');
+      if (!shift) return;
+      shift.innerHTML = '<option value="">Choose a shift</option>' +
+        (res.shifts || []).map(function(n) { return '<option value="' + admEsc(n) + '">' + admEsc(n) + '</option>'; }).join('');
+      document.getElementById('admWfSupList').innerHTML = (res.supervisors || []).map(function(n) { return '<option value="' + admEsc(n) + '"></option>'; }).join('');
+      if (res.employeeMasterReachable === false) document.getElementById('admWfWarn').textContent = res.message || 'Employee Master could not be reached.';
+    }).catch(function(err) {
+      const shift = document.getElementById('admWfShift');
+      if (shift) shift.innerHTML = '<option value="">Could not load shifts</option>';
+      const warn = document.getElementById('admWfWarn');
+      if (warn) warn.textContent = err.message || 'Could not load the form options.';
+    });
+  }
+  async function admWfAddSubmit(el) {
+    if (adm.busy) return;
+    const msg = document.getElementById('admSheetMsg');
+    const get = function(id) { return document.getElementById(id).value.trim(); };
+    const name = get('admWfName'), gmail = get('admWfGmail'), mobile = get('admWfMobile'), shift = get('admWfShift');
+    msg.className = 'adm-bad adm-mt';
+    if (name.length < 2) { msg.textContent = 'Enter the name.'; return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(gmail)) { msg.textContent = 'Enter a valid Awign registered Gmail.'; return; }
+    if (mobile.replace(/\D/g, '').length < 10) { msg.textContent = 'Enter the 10-digit mobile number used in the app.'; return; }
+    if (!shift) { msg.textContent = 'Choose a shift.'; return; }
+    adm.busy = true;
+    el.disabled = true;
+    msg.textContent = '';
+    try {
+      const res = await admCall('adminAddWorkforce', {
+        requestId: adm.requestId,
+        name: name, gmail: gmail, mobile: mobile, shift: shift,
+        weekoff: get('admWfWeekoff'), supervisor: get('admWfSupervisor'),
+        isResident: get('admWfResident'), isSupervisor: get('admWfIsSup'), status: get('admWfStatus')
+      });
+      adm.busy = false;
+      el.disabled = false;
+      adm.requestId = admNewId();
+      adm.wfAdded += 1;
+      ['admWfName', 'admWfGmail', 'admWfMobile'].forEach(function(id) { document.getElementById(id).value = ''; });
+      msg.className = 'adm-good adm-mt';
+      msg.textContent = res.message + (adm.wfAdded > 1 ? ' (' + adm.wfAdded + ' added in this session)' : '') + ' You can add the next person.';
+      admToast(res.message);
+      document.getElementById('admWfName').focus();
+    } catch (err) {
+      adm.busy = false;
+      el.disabled = false;
+      msg.textContent = err.message;
+    }
+  }
+
   function admBodyClick(e) {
 
     const t = e.target;
     let el;
 
+    if (t.closest('[data-wf-add]')) return admWfAddOpen();
     if ((el = t.closest('[data-sites-view]'))) { adm.sitesView = el.getAttribute('data-sites-view'); return admSites(); }
     if (t.closest('[data-sites-refresh]')) return admSites();
     if (t.closest('[data-qr-print]')) return admQrPrint();
@@ -10453,6 +10535,7 @@ const BACKEND_TIMEOUT_MS = 20000;
 
       let el;
 
+      if ((el = e.target.closest('[data-confirm-wfadd]'))) return admWfAddSubmit(el);
       if (e.target.closest('[data-loc-here]')) return admLocHere();
       if (e.target.closest('[data-loc-read]')) return admLocReadLink();
       if ((el = e.target.closest('[data-confirm-loc]'))) return admLocSubmit(el);
