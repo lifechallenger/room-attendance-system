@@ -866,9 +866,10 @@ body.adm-no-employee #weekoffInfo { display: none !important; }
   padding-bottom: env(safe-area-inset-bottom);
 }
 .adm-tabs button {
-  flex: 1; border: 0; background: none; padding: 11px 2px; font-size: 12px;
+  flex: 1 1 0; min-width: 0; border: 0; background: none; padding: 11px 1px; font-size: 11px;
   color: #5f6368; cursor: pointer; font-weight: 600; min-height: 48px;
 }
+.adm-tabs.many button { font-size: 10px; letter-spacing: -.2px; }
 .adm-tabs button.active { color: #1a73e8; box-shadow: inset 0 3px 0 #1a73e8; }
 
 .adm-card {
@@ -897,6 +898,12 @@ body.adm-no-employee #weekoffInfo { display: none !important; }
   .adm-print-name { font-size: 24px; margin-top: 4mm; }
   .adm-print-sup { font-size: 22px; margin-top: 4mm; }
 }
+.adm-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.adm-chips button { width: auto; flex: 0 0 auto; min-height: 0; border: 1px solid #dadce0; background: #fff; border-radius: 16px; padding: 6px 11px; font-size: 13px; font-weight: 600; color: #3c4043; cursor: pointer; }
+.adm-chips button.active { background: #e8f0fe; border-color: #1a73e8; color: #1a73e8; }
+.adm-stats { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; font-size: 13px; color: #3c4043; }
+.adm-stats b { font-size: 16px; }
+.adm-note { background: #e8f0fe; color: #174ea6; border-radius: 10px; padding: 9px 12px; font-size: 13px; margin-bottom: 10px; }
 .adm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
 .adm-grid .adm-card { margin: 0; }
 .adm-k { font-size: 12px; color: #5f6368; font-weight: 600; text-transform: uppercase; letter-spacing: .3px; }
@@ -1751,14 +1758,7 @@ body.adm-no-employee #weekoffInfo { display: none !important; }
     </div>
   </div>
 
-  <nav id="admTabs" class="adm-tabs">
-    <button type="button" data-tab="home" class="active">Home</button>
-    <button type="button" data-tab="presence">Presence</button>
-    <button type="button" data-tab="penalties">Penalties</button>
-    <button type="button" data-tab="workforce">Workforce</button>
-    <button type="button" data-tab="approvals">Approvals</button>
-    <button type="button" data-tab="sites">Sites</button>
-  </nav>
+  <nav id="admTabs" class="adm-tabs"></nav>
 
   <div id="admSheetWrap" class="adm-sheet-wrap hidden">
     <div id="admSheet" class="adm-sheet"></div>
@@ -8961,6 +8961,8 @@ const BACKEND_TIMEOUT_MS = 20000;
     apKind: 'resignation',
     apStatus: 'Pending',
     sitesView: 'qr',
+    pf: { q: '', locationId: '', status: 'all' },
+    home: null,
     qrLabels: [],
     locations: [],
     locQ: '',
@@ -9059,9 +9061,37 @@ const BACKEND_TIMEOUT_MS = 20000;
 
   }
 
+  function admFeatures() {
+    return (adm.access && adm.access.features) || {};
+  }
+
+  function admScopeText() {
+    const l = adm.access && adm.access.locations;
+    return l && l.length ? 'Showing only your locations: ' + l.join(', ') + '.' : '';
+  }
+
+  function admBuildTabs() {
+    const f = admFeatures();
+    const tabs = [['home', 'Home'], ['people', 'People'], ['sites', 'Locations']];
+    if (f.presence) tabs.push(['presence', 'Presence']);
+    if (f.workforce) tabs.push(['workforce', 'Workforce']);
+    if (f.penalties) tabs.push(['penalties', 'Penalties']);
+    tabs.push(['approvals', 'Approvals']);
+    if (!tabs.some(function(t) { return t[0] === adm.tab; })) adm.tab = 'home';
+    document.getElementById('admTabs').className = 'adm-tabs' + (tabs.length > 5 ? ' many' : '');
+    document.getElementById('admTabs').innerHTML = tabs.map(function(t) {
+      return '<button type="button" data-tab="' + t[0] + '"' + (t[0] === adm.tab ? ' class="active"' : '') + '>' + t[1] + '</button>';
+    }).join('');
+  }
+
   function admOpen() {
     if (!adm.access) return;
     document.getElementById('admRole').textContent = adm.access.role + (adm.access.canWrite ? '' : ' · read only');
+    admBuildTabs();
+    /* Tabs such as Penalties appear later (on the penalty start date): pick that up without a reload. */
+    selfServiceJsonp('adminWhoAmI').then(function(res) {
+      if (res && res.success && res.isAdmin) { adm.access = res; admBuildTabs(); }
+    }).catch(function() {});
     document.getElementById('admOverlay').classList.remove('hidden');
     document.body.classList.add('adm-open');
     admShowTab(adm.tab || 'home');
@@ -9088,6 +9118,7 @@ const BACKEND_TIMEOUT_MS = 20000;
     document.getElementById('admBody').scrollTop = 0;
 
     if (tab === 'home') admHome();
+    else if (tab === 'people') admPeople();
     else if (tab === 'presence') admPresence();
     else if (tab === 'penalties') admPenalties();
     else if (tab === 'workforce') admWorkforce();
@@ -9109,7 +9140,17 @@ const BACKEND_TIMEOUT_MS = 20000;
     adm.busy = false;
   }
 
-  /* ---------- Home ---------- */
+  /* ---------- Home: one card per location ---------- */
+
+  function admStatsHtml(c) {
+    const bits = [];
+    bits.push('<span><b>' + c.present + '</b> in</span>');
+    bits.push('<span class="' + (c.notYet > 0 ? 'adm-bad' : '') + '"><b>' + c.notYet + '</b> not yet</span>');
+    if (c.leave) bits.push('<span><b>' + c.leave + '</b> on leave</span>');
+    if (c.weekoff) bits.push('<span><b>' + c.weekoff + '</b> weekoff</span>');
+    if (c.moved) bits.push('<span><b>' + c.moved + '</b> moved</span>');
+    return '<div class="adm-stats">' + bits.join('') + '</div>';
+  }
 
   async function admHome() {
 
@@ -9117,47 +9158,41 @@ const BACKEND_TIMEOUT_MS = 20000;
 
     try {
 
-      const o = await admCall('adminOverview');
+      const o = await admCall('adminHome');
       if (adm.tab !== 'home') return;
+      adm.home = o;
 
-      function shiftCard(shift) {
-        const c = (o.presence && o.presence[shift]) || { listed: 0, punched: 0 };
-        const notIn = c.listed - c.punched;
-        return '<button type="button" class="adm-card adm-tap" data-goto="presence" data-shift="' + shift + '">' +
-          '<div class="adm-k">' + shift + ' shift</div>' +
-          '<div class="adm-v">' + c.punched + '<span>/ ' + c.listed + ' in</span></div>' +
-          '<div class="adm-sub ' + (notIn > 0 ? 'adm-bad' : '') + '">' +
-          (c.listed ? notIn + ' not punched in' + (c.extra ? ' \u00B7 +' + c.extra + ' not on the list' : '') : 'List not ready yet') + '</div></button>';
-      }
+      const pend = o.pending || {};
+      const pendingTotal = (pend.resignations || 0) + (pend.longLeaves || 0) + (pend.contests || 0);
+      const scope = admScopeText();
 
-      const f = o.forecastToday;
-      const h = o.headcount;
+      const cards = o.locations.map(function(l) {
+        return '<button type="button" class="adm-card adm-tap" data-home-loc="' + admEsc(l.locationId) + '">' +
+          '<div class="adm-line"><b>' + admEsc(l.locationId) + '</b>' + (l.status && l.status.toLowerCase() !== 'active' ? admStatusPill(l.status) : '') + '</div>' +
+          '<div>' + admEsc(l.locationName || 'Unnamed location') + '</div>' +
+          '<div class="adm-mut">Supervisor: ' + admEsc(l.supervisor || 'not assigned') + ' &middot; ' + l.counts.people + (l.counts.people === 1 ? ' person' : ' people') + '</div>' +
+          admStatsHtml(l.counts) + '</button>';
+      }).join('');
+
+      const un = o.unassigned
+        ? '<button type="button" class="adm-card adm-tap" data-home-loc="NONE">' +
+          '<div class="adm-line"><b>No location yet</b></div>' +
+          '<div class="adm-mut">Not checked in anywhere and no registered work site. ' + o.unassigned.people + (o.unassigned.people === 1 ? ' person' : ' people') + '</div>' +
+          admStatsHtml(o.unassigned) + '</button>'
+        : '';
 
       admBody(
-        '<div class="adm-grid">' + shiftCard('Day') + shiftCard('Night') + '</div>' +
-
-        '<button type="button" class="adm-card adm-tap" data-goto="workforce">' +
-        '<div class="adm-k">Today’s workforce</div>' +
-        (f
-          ? '<div class="adm-v">' + f.expected + '<span>expected of ' + f.scheduled + ' scheduled</span></div>' +
-            '<div class="adm-sub">' + f.onLeaveKnown + ' on approved/applied leave</div>'
-          : '<div class="adm-sub">No forecast row yet.</div>') +
-        '</button>' +
-
-        '<div class="adm-card"><div class="adm-k">Headcount' + (h ? ' · ' + admNiceDate(h.date) : '') + '</div>' +
-        (h
-          ? '<div class="adm-sub"><b>' + h.active + '</b> active · <b>' + h.onLeave + '</b> on leave · ' + h.inactive + ' inactive</div>'
-          : '<div class="adm-sub">Not logged yet.</div>') + '</div>' +
-
-        '<button type="button" class="adm-card adm-tap" data-goto="approvals">' +
-        '<div class="adm-k">Waiting for a decision</div>' +
-        '<div class="adm-sub"><b>' + o.pending.resignations + '</b> resignation' + (o.pending.resignations === 1 ? '' : 's') +
-        ' · <b>' + o.pending.longLeaves + '</b> long leave' + (o.pending.longLeaves === 1 ? '' : 's') +
-        ' \u00B7 <b>' + (o.pending.contests || 0) + '</b> contest' + ((o.pending.contests || 0) === 1 ? '' : 's') + '</div></button>' +
-
-        '<div class="adm-h">Find an employee</div>' +
-        '<input id="admEmpQ" class="adm-input" type="search" placeholder="Name, User ID or email" autocomplete="off">' +
-        '<div id="admEmpResults" class="adm-mt"></div>'
+        (scope ? '<div class="adm-note">' + admEsc(scope) + '</div>' : '') +
+        '<div class="adm-mut" style="margin-bottom:8px">Today ' + admNiceDate(o.today) + ' &middot; ' + o.totals.people + ' active people &middot; ' + o.totals.present + ' checked in</div>' +
+        (pendingTotal
+          ? '<button type="button" class="adm-card adm-tap" data-goto="approvals"><div class="adm-k">Waiting for a decision</div>' +
+            '<div class="adm-sub"><b>' + (pend.resignations || 0) + '</b> resignation' + ((pend.resignations || 0) === 1 ? '' : 's') +
+            ' &middot; <b>' + (pend.longLeaves || 0) + '</b> long leave' + ((pend.longLeaves || 0) === 1 ? '' : 's') +
+            ' &middot; <b>' + (pend.contests || 0) + '</b> contest' + ((pend.contests || 0) === 1 ? '' : 's') + '</div></button>'
+          : '') +
+        '<div class="adm-h">Locations</div>' +
+        (cards || '<div class="adm-empty">No locations found.</div>') + un +
+        '<div class="adm-mut adm-mt">A person is shown at the location of their latest check-in; before their first check-in, at the work site they registered. &ldquo;Moved&rdquo; means they checked in at more than one location in the last 14 days.</div>'
       );
 
     } catch (err) {
@@ -9167,38 +9202,75 @@ const BACKEND_TIMEOUT_MS = 20000;
 
   }
 
-  async function admEmpSearch(q) {
+  /* ---------- People ---------- */
 
-    const box = document.getElementById('admEmpResults');
-    if (!box) return;
+  const ADM_STATUS_LABELS = { present: 'Checked in', notYet: 'Not yet', leave: 'On leave', weekoff: 'Weekoff', inactive: 'Inactive' };
+  const ADM_STATUS_PILL = { present: 'green', notYet: 'red', leave: 'amber', weekoff: 'blue', inactive: '' };
 
-    if (q.trim().length < 2) {
-      box.innerHTML = '';
-      return;
+  function admPeopleFrame() {
+    const f = adm.pf;
+    const locs = (adm.home && adm.home.locations) || [];
+    const canAdd = true;
+    admBody(
+      (admScopeText() ? '<div class="adm-note">' + admEsc(admScopeText()) + '</div>' : '') +
+      '<div class="adm-card"><div class="adm-line"><div><b>Add workforce</b><div class="adm-sub">Add a person to Employee Master</div></div>' +
+      '<button type="button" class="adm-btn" style="flex:0 0 auto;width:auto;padding:0 18px" data-wf-add="1">Add</button></div></div>' +
+      '<input id="admPeopleQ" class="adm-input" type="search" placeholder="Name, email, User ID or location" autocomplete="off" value="' + admEsc(f.q) + '">' +
+      '<select id="admPeopleLoc" class="adm-select adm-mt"><option value="">All locations</option>' +
+      locs.map(function(l) { return '<option value="' + admEsc(l.locationId) + '"' + (f.locationId === l.locationId ? ' selected' : '') + '>' + admEsc(l.locationId + ' · ' + (l.locationName || '')) + '</option>'; }).join('') +
+      ((adm.access && adm.access.locations) ? '' : '<option value="NONE"' + (f.locationId === 'NONE' ? ' selected' : '') + '>No location yet</option>') +
+      '</select>' +
+      '<div id="admPeopleChips" class="adm-chips"></div>' +
+      '<div id="admPeopleList"><div class="adm-empty">Loading&hellip;</div></div>'
+    );
+  }
+
+  async function admPeople() {
+
+    if (!adm.home) {
+      try { adm.home = await admCall('adminHome'); } catch (err) { /* the filter just has no location list */ }
+      if (adm.tab !== 'people') return;
     }
+    admPeopleFrame();
+    await admPeopleLoad();
+
+  }
+
+  async function admPeopleLoad() {
+
+    const list = document.getElementById('admPeopleList');
+    if (!list) return;
 
     try {
 
-      const res = await admCall('adminEmployeeSearch', { q: q.trim() });
-      const current = document.getElementById('admEmpQ');
-      if (!current || current.value.trim() !== q.trim()) return;
+      const f = adm.pf;
+      const res = await admCall('adminPeople', { q: f.q, locationId: f.locationId, status: f.status });
+      if (adm.tab !== 'people' || !document.getElementById('admPeopleList')) return;
 
-      box.innerHTML = res.employees.length
-        ? res.employees.map(function(e) {
-            return '<button type="button" class="adm-card adm-tap" data-emp="' + admEsc(e.userId) + '">' +
-              '<div class="adm-line"><span class="adm-name">' + admEsc(e.name || e.userId) + '</span>' +
-              '<span class="adm-pill ' + (e.status.toLowerCase() === 'active' ? 'green' : '') + '">' + admEsc(e.status) + '</span></div>' +
-              '<div class="adm-mut">' + admEsc(e.userId) + (e.isSupervisor ? ' · supervisor' : '') + '</div></button>';
-          }).join('')
-        : '<div class="adm-empty">No match.</div>';
+      const c = res.counts;
+      const chips = [['all', 'All', c.all], ['notYet', 'Not yet', c.notYet], ['present', 'In', c.present], ['leave', 'Leave', c.leave], ['weekoff', 'Weekoff', c.weekoff], ['moved', 'Moved', c.moved], ['inactive', 'Inactive', c.inactive]];
+      document.getElementById('admPeopleChips').innerHTML = chips.map(function(x) {
+        return '<button type="button" data-pf-status="' + x[0] + '"' + (f.status === x[0] ? ' class="active"' : '') + '>' + x[1] + ' ' + x[2] + '</button>';
+      }).join('');
+
+      list.innerHTML = res.people.length
+        ? res.people.map(function(p) {
+            return '<button type="button" class="adm-card adm-tap" data-person="' + admEsc(p.gmail) + '">' +
+              '<div class="adm-line"><span class="adm-name">' + admEsc(p.name || p.gmail) + '</span>' +
+              '<span class="adm-pill ' + (ADM_STATUS_PILL[p.today] || '') + '">' + admEsc(ADM_STATUS_LABELS[p.today] || '') + (p.today === 'present' && p.todayTime ? ' ' + admEsc(p.todayTime) : '') + '</span></div>' +
+              '<div class="adm-mut">' + (p.locationId ? admEsc(p.locationId + (p.locationName ? ' · ' + p.locationName : '')) : 'No location yet') +
+              (p.locationSource === 'registration' ? ' (registered)' : '') + '</div>' +
+              '<div class="adm-mut">' + admEsc(p.userId || 'No User ID yet') + (p.isResident ? ' · resident' : '') + (p.isSupervisor ? ' · supervisor' : '') +
+              (p.moved ? ' · <span class="adm-bad">moved</span>' : '') + '</div></button>';
+          }).join('') + (res.truncated ? '<div class="adm-empty">Showing the first 200. Narrow the search to see others.</div>' : '')
+        : '<div class="adm-empty">No one matches.</div>';
 
     } catch (err) {
+      list.innerHTML = '<div class="adm-empty">' + admEsc(err.message || 'Could not load.') + '</div>';
       admFail(err);
     }
 
   }
-
-  /* ---------- Presence ---------- */
 
   async function admPresence() {
 
@@ -9282,13 +9354,13 @@ const BACKEND_TIMEOUT_MS = 20000;
 
   /* ---------- Employee sheet ---------- */
 
-  async function admEmployee(userId) {
+  async function admEmployee(gmail) {
 
     admOpenSheet('<div class="adm-empty">Loading&hellip;</div>');
 
     try {
 
-      const r = await admCall('adminEmployeeProfile', { userId: userId });
+      const r = await admCall('adminEmployeeProfile', { gmail: gmail });
       const p = r.profile;
 
       function mini(items, fn, empty) {
@@ -9300,32 +9372,39 @@ const BACKEND_TIMEOUT_MS = 20000;
       const canWrite = !!(adm.access && adm.access.canWrite);
       const weekoffOn = !!(adm.access && adm.access.weekoffEditEnabled);
       const today = admDateKey(new Date());
-      const dataUser = ' data-user="' + admEsc(p.userId) + '" data-name="' + admEsc(p.name || p.userId) + '"';
+      const dataUser = ' data-user="' + admEsc(p.userId) + '" data-name="' + admEsc(p.name || p.gmail) + '"';
+      const hasId = !!p.hasUserId;
       const statusBtn = '<button type="button" class="adm-btn ' + (isActive ? 'warn' : 'ok') + ' block' + '" data-set-status="' + (isActive ? 'Inactive' : 'Active') + '"' + dataUser + ' data-hold="' + (r.manualHoldDays || 0) + '">' + (isActive ? 'Mark inactive' : 'Mark active') + '</button>';
       const weekoffBtn = weekoffOn ? '<button type="button" class="adm-btn alt" data-set-weekoff="1"' + dataUser + ' data-current="' + admEsc(p.weekoff || '') + '">Change weekoff</button>' : '';
       adm.shiftOptions = r.shiftOptions || [];
       const shiftBtn = '<button type="button" class="adm-btn alt' + (weekoffOn ? '' : ' block') + '" data-set-shift="1"' + dataUser + ' data-current="' + admEsc(p.shiftId || '') + '">Change shift</button>';
 
       admOpenSheet(
-        '<div class="adm-line"><h3>' + admEsc(p.name || p.userId) + '</h3><button type="button" class="adm-icon-btn" data-sheet-close="1">&#10005;</button></div>' +
-        '<div class="adm-mut">' + admEsc(p.userId) + ' · ' + admEsc(p.gmail) + '</div>' +
+        '<div class="adm-line"><h3>' + admEsc(p.name || p.gmail) + '</h3><button type="button" class="adm-icon-btn" data-sheet-close="1">&#10005;</button></div>' +
+        '<div class="adm-mut">' + admEsc(p.userId || 'No User ID yet') + ' · ' + admEsc(p.gmail) + '</div>' +
+        '<div class="adm-mt"><b>' + (p.locationId ? admEsc(p.locationId + (p.locationName ? ' · ' + p.locationName : '')) : 'No location yet') + '</b>' +
+        '<div class="adm-mut">' + (p.locationId ? 'From their ' + (p.locationSource === 'check-in' ? 'latest check-in' : 'registered work site') : 'Not checked in and no registered work site') +
+        (p.supervisor ? ' · Supervisor: ' + admEsc(p.supervisor) : '') + '</div>' +
+        (p.seenAt && p.seenAt.length > 1 ? '<div class="adm-mut adm-bad">Checked in at ' + admEsc(p.seenAt.join(', ')) + ' in the last 14 days</div>' : '') + '</div>' +
         '<div class="adm-mt"><span class="adm-pill ' + pillClass + '">' + admEsc(p.status) + '</span> ' +
         '<span class="adm-pill blue">' + admEsc(p.shift || 'No shift') + '</span> ' +
+        (p.isResident ? '<span class="adm-pill">Resident</span> ' : '') +
         (p.isSupervisor ? '<span class="adm-pill amber">Supervisor</span> ' : '') +
-        (r.today ? '<span class="adm-pill ' + (r.today.status === 'Punched In' ? 'green' : 'red') + '">Today: ' +
+        (r.today ? '<span class="adm-pill ' + (r.today.state === 'present' ? 'green' : r.today.state === 'notYet' ? 'red' : 'amber') + '">Today: ' +
           admEsc(r.today.status) + (r.today.punchedAt ? ' ' + admEsc(r.today.punchedAt) : '') + '</span>' : '') + '</div>' +
         '<div class="adm-mut adm-mt">Weekoff: ' + admEsc(p.weekoff || 'none') + ' · Joined: ' + admEsc(p.joined || 'not set') +
         (p.workSite ? ' · Work Site: ' + admEsc(p.workSite) : '') + '</div>' +
         (r.statusNote ? '<div class="adm-mut adm-mt">Status note: ' + admEsc(r.statusNote.reason) + '</div>' : '') +
         (r.statusNote && r.statusNote.holdUntil && r.statusNote.holdUntil >= today ? '<div class="adm-mut">Automatic status changes are paused until ' + admNiceDate(r.statusNote.holdUntil) + '.</div>' : '') +
-        (canWrite ? '<div class="adm-mt">' + statusBtn + '</div><div class="' + (weekoffOn ? 'adm-row2' : 'adm-mt') + '">' + shiftBtn + weekoffBtn + '</div>' : '') +
+        (canWrite && hasId ? '<div class="adm-mt">' + statusBtn + '</div><div class="' + (weekoffOn ? 'adm-row2' : 'adm-mt') + '">' + shiftBtn + weekoffBtn + '</div>' : '') +
+        (canWrite && !hasId ? '<div class="adm-note adm-mt">This person has no User ID yet, so status, shift and weekoff cannot be changed from here. They need to apply and sign the offer letter in the Awign app first.</div>' : '') +
 
-        '<details open><summary>Penalties, last 45 days (' + r.penalties.length + ')</summary>' +
+        '<details><summary>Penalties, last 45 days (' + r.penalties.length + ')</summary>' +
         mini(r.penalties, function(x) {
           return '<b>' + admEsc(x.type) + '</b> · ' + admNiceDate(x.date) + ' · ' +
             (x.state === 'Full' ? admMoney(x.current) : '<s>' + admMoney(x.original) + '</s> ' + admMoney(x.current) + ' (' + x.state + ')');
         }, 'None.') +
-        '<div class="adm-mt"><button type="button" class="adm-btn alt block" data-pen-user="' + admEsc(p.userId) + '">Open in Penalties</button></div></details>' +
+        (hasId && admFeatures().penalties ? '<div class="adm-mt"><button type="button" class="adm-btn alt block" data-pen-user="' + admEsc(p.userId) + '">Open in Penalties</button></div>' : '') + '</details>' +
 
         '<details><summary>Leave and resignation</summary>' +
         mini(r.leaves, function(x) { return admNiceDate(x.start) + (x.end !== x.start ? ' – ' + admNiceDate(x.end) : '') + ' · ' + admEsc(x.type) + ' · ' + admEsc(x.status); }, 'No leave applications.') +
@@ -9947,8 +10026,6 @@ const BACKEND_TIMEOUT_MS = 20000;
   async function admWorkforce() {
 
     admBody(
-      '<div class="adm-card"><div class="adm-line"><div><b>Add workforce</b><div class="adm-sub">Add a person to Employee Master</div></div>' +
-      '<button type="button" class="adm-btn" style="flex:0 0 auto;width:auto;padding:0 18px" data-wf-add="1">Add</button></div></div>' +
       '<div class="adm-seg">' + ['Total', 'Day', 'Night'].map(function(s) {
         return '<button type="button" data-wf-shift="' + s + '"' + (adm.wfShift === s ? ' class="active"' : '') + '>' + s + '</button>';
       }).join('') + '</div><div id="admWfBox"><div class="adm-empty">Loading&hellip;</div></div>'
@@ -10160,6 +10237,7 @@ const BACKEND_TIMEOUT_MS = 20000;
       '<div class="adm-seg">' +
       '<button type="button" data-sites-view="qr"' + (view === 'qr' ? ' class="active"' : '') + '>QR labels</button>' +
       '<button type="button" data-sites-view="loc"' + (view === 'loc' ? ' class="active"' : '') + '>Location check</button></div>' +
+      (admScopeText() ? '<div class="adm-note">' + admEsc(admScopeText()) + '</div>' : '') +
       '<div id="admSitesBox"><div class="adm-empty">Loading&hellip;</div></div>'
     );
     return document.getElementById('admSitesBox');
@@ -10448,6 +10526,7 @@ const BACKEND_TIMEOUT_MS = 20000;
       msg.className = 'adm-good adm-mt';
       msg.textContent = res.message + (adm.wfAdded > 1 ? ' (' + adm.wfAdded + ' added in this session)' : '') + ' You can add the next person.';
       admToast(res.message);
+      adm.home = null;
       document.getElementById('admWfName').focus();
     } catch (err) {
       adm.busy = false;
@@ -10467,7 +10546,9 @@ const BACKEND_TIMEOUT_MS = 20000;
     if (t.closest('[data-qr-print]')) return admQrPrint();
     if ((el = t.closest('[data-loc-open]'))) return admLocOpen(el);
     if ((el = t.closest('[data-pen-why]'))) return admPenWhy(el);
-    if ((el = t.closest('[data-emp]'))) return admEmployee(el.getAttribute('data-emp'));
+    if ((el = t.closest('[data-person],[data-emp]'))) return admEmployee(el.getAttribute('data-person') || el.getAttribute('data-emp'));
+    if ((el = t.closest('[data-home-loc]'))) { adm.pf = { q: '', locationId: el.getAttribute('data-home-loc'), status: 'all' }; return admShowTab('people'); }
+    if ((el = t.closest('[data-pf-status]'))) { adm.pf.status = el.getAttribute('data-pf-status'); return admPeopleLoad(); }
 
     if ((el = t.closest('[data-goto]'))) {
       const shift = el.getAttribute('data-shift');
@@ -10507,6 +10588,7 @@ const BACKEND_TIMEOUT_MS = 20000;
     body.addEventListener('click', admBodyClick);
 
     body.addEventListener('change', function(e) {
+      if (e.target.id === 'admPeopleLoc') { adm.pf.locationId = e.target.value; return admPeopleLoad(); }
       if (e.target.matches('input[data-pick]')) admPenPick(e.target);
     });
 
@@ -10514,10 +10596,10 @@ const BACKEND_TIMEOUT_MS = 20000;
 
     body.addEventListener('input', function(e) {
       if (e.target.id === 'admLocQ') { adm.locQ = e.target.value; return admLocRender(); }
-      if (e.target.id !== 'admEmpQ') return;
+      if (e.target.id !== 'admPeopleQ') return;
       clearTimeout(searchTimer);
-      const value = e.target.value;
-      searchTimer = setTimeout(function() { admEmpSearch(value); }, 300);
+      adm.pf.q = e.target.value.trim();
+      searchTimer = setTimeout(admPeopleLoad, 300);
     });
 
     body.addEventListener('keydown', function(e) {
