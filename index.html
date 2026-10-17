@@ -898,6 +898,8 @@ body.adm-no-employee #weekoffInfo { display: none !important; }
   .adm-print-name { font-size: 24px; margin-top: 4mm; }
   .adm-print-sup { font-size: 22px; margin-top: 4mm; }
 }
+.adm-qrbig { background: #fff; padding: 8px; margin: 10px auto; width: min(86vw, 360px); }
+.adm-qrbig svg { width: 100%; height: auto; display: block; }
 .adm-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
 .adm-chips button { width: auto; flex: 0 0 auto; min-height: 0; border: 1px solid #dadce0; background: #fff; border-radius: 16px; padding: 6px 11px; font-size: 13px; font-weight: 600; color: #3c4043; cursor: pointer; }
 .adm-chips button.active { background: #e8f0fe; border-color: #1a73e8; color: #1a73e8; }
@@ -10258,17 +10260,18 @@ const BACKEND_TIMEOUT_MS = 20000;
     const res = await admCall('adminQrLabels');
     if (adm.tab !== 'sites' || adm.sitesView !== 'qr') return;
     adm.qrLabels = res.labels || [];
-    const cards = adm.qrLabels.map(function(l) {
+    const cards = adm.qrLabels.map(function(l, i) {
       const qr = l.token
         ? admQrSvg(l.token)
         : '<div class="adm-mut" style="width:112px;height:112px;display:flex;align-items:center;text-align:center;font-size:12px">No QR token yet</div>';
-      return '<div class="adm-card adm-qrcard">' +
+      return '<div class="adm-card adm-qrcard' + (l.token ? ' adm-tap' : '') + '"' + (l.token ? ' data-qr-zoom="' + i + '"' : '') + '>' +
         '<div class="adm-qrimg">' + qr + '</div>' +
         '<div class="adm-qrtext">' +
         '<div class="adm-qrloc">' + admEsc(l.locationId || 'No location') + '</div>' +
         '<div class="adm-qrname">' + admEsc(l.locationName || 'Unnamed location') + '</div>' +
         '<div class="adm-qrsup">Supervisor: <b>' + admEsc(l.supervisor || 'Not assigned') + '</b></div>' +
         '<div class="adm-mut" style="margin-top:4px">' + admEsc(l.workSiteId) + ' &middot; ' + admStatusPill(l.status) + '</div>' +
+        (l.token ? '<div class="adm-mut" style="margin-top:2px">Tap to enlarge</div>' : '') +
         '</div></div>';
     }).join('');
     box.innerHTML =
@@ -10281,6 +10284,19 @@ const BACKEND_TIMEOUT_MS = 20000;
     adm.timer = setTimeout(function() {
       if (adm.tab === 'sites' && adm.sitesView === 'qr' && !adm.busy) admQrLabels().catch(function() {});
     }, 60000);
+  }
+
+  function admQrZoom(i) {
+    const l = (adm.qrLabels || [])[i];
+    if (!l || !l.token) return;
+    admOpenSheet(
+      '<div class="adm-line"><h3>' + admEsc(l.locationId || 'No location') + '</h3><button type="button" class="adm-icon-btn" data-sheet-close="1">&#10005;</button></div>' +
+      '<div class="adm-qrbig">' + admQrSvg(l.token) + '</div>' +
+      '<div class="adm-qrname" style="text-align:center">' + admEsc(l.locationName || 'Unnamed location') + '</div>' +
+      '<div class="adm-mut" style="text-align:center">Supervisor: <b>' + admEsc(l.supervisor || 'Not assigned') + '</b> &middot; ' + admEsc(l.workSiteId) + '</div>' +
+      '<div class="adm-mut adm-mt" style="text-align:center">Turn the screen brightness up and hold it steady for the scan.</div>' +
+      '<button type="button" class="adm-btn alt block adm-mt" data-sheet-close="1">Close</button>'
+    );
   }
 
   function admQrPrint() {
@@ -10544,6 +10560,7 @@ const BACKEND_TIMEOUT_MS = 20000;
     if ((el = t.closest('[data-sites-view]'))) { adm.sitesView = el.getAttribute('data-sites-view'); return admSites(); }
     if (t.closest('[data-sites-refresh]')) return admSites();
     if (t.closest('[data-qr-print]')) return admQrPrint();
+    if ((el = t.closest('[data-qr-zoom]'))) return admQrZoom(Number(el.getAttribute('data-qr-zoom')));
     if ((el = t.closest('[data-loc-open]'))) return admLocOpen(el);
     if ((el = t.closest('[data-pen-why]'))) return admPenWhy(el);
     if ((el = t.closest('[data-person],[data-emp]'))) return admEmployee(el.getAttribute('data-person') || el.getAttribute('data-emp'));
