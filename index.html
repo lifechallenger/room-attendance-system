@@ -8443,7 +8443,33 @@ const BACKEND_TIMEOUT_MS = 20000;
       Math.random().toString(36).slice(2);
   }
 
+  /*
+   * Reads (get*) and admin calls are safe to repeat: admin writes carry a requestId the server
+   * de-duplicates. They get one automatic retry after a short pause, because the occasional
+   * dropped request (Apps Script busy or starting up) is the usual cause of "Failed to reach".
+   * Attendance scans and other submissions are never retried here.
+   */
+  function jsonpIsRetryable_(payload) {
+    return !!payload && typeof payload.action === 'string' && /^(get|admin)/.test(payload.action);
+  }
+
   function submitViaJsonp(payload) {
+
+    return submitViaJsonpOnce(payload).catch(function(error) {
+
+      if (!jsonpIsRetryable_(payload)) throw error;
+
+      return new Promise(function(resolve) {
+        setTimeout(resolve, 700 + Math.random() * 600);
+      }).then(function() {
+        return submitViaJsonpOnce(payload);
+      });
+
+    });
+
+  }
+
+  function submitViaJsonpOnce(payload) {
 
     return new Promise(function(resolve, reject) {
 
@@ -8467,6 +8493,7 @@ const BACKEND_TIMEOUT_MS = 20000;
       window[callbackName] = function(result) {
         if (settled) return;
         settled = true;
+        clearTimeout(slowTimer);
         cleanup();
         resolve(result);
       };
@@ -8474,11 +8501,20 @@ const BACKEND_TIMEOUT_MS = 20000;
       script.onerror = function() {
         if (settled) return;
         settled = true;
+        clearTimeout(slowTimer);
         cleanup();
         reject(
           new Error('Failed to reach the attendance backend.')
         );
       };
+
+      /* A request that never answers must not leave the screen waiting forever. */
+      const slowTimer = setTimeout(function() {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(new Error('The attendance backend is taking too long to answer.'));
+      }, 45000);
 
       script.src =
         APPS_SCRIPT_URL +
@@ -9090,10 +9126,6 @@ const BACKEND_TIMEOUT_MS = 20000;
     if (!adm.access) return;
     document.getElementById('admRole').textContent = adm.access.role + (adm.access.canWrite || adm.access.role === 'Supervisor' ? '' : ' · read only');
     admBuildTabs();
-    /* Tabs such as Penalties appear later (on the penalty start date): pick that up without a reload. */
-    selfServiceJsonp('adminWhoAmI').then(function(res) {
-      if (res && res.success && res.isAdmin) { adm.access = res; admBuildTabs(); }
-    }).catch(function() {});
     document.getElementById('admOverlay').classList.remove('hidden');
     document.body.classList.add('adm-open');
     admShowTab(adm.tab || 'home');
@@ -9163,6 +9195,12 @@ const BACKEND_TIMEOUT_MS = 20000;
       const o = await admCall('adminHome');
       if (adm.tab !== 'home') return;
       adm.home = o;
+
+      /* Home carries the current feature flags (e.g. Penalties appearing on its start date). */
+      if (o.features && adm.access && JSON.stringify(o.features) !== JSON.stringify(adm.access.features)) {
+        adm.access.features = o.features;
+        admBuildTabs();
+      }
 
       const pend = o.pending || {};
       const pendingTotal = (pend.resignations || 0) + (pend.longLeaves || 0) + (pend.contests || 0);
