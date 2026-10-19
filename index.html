@@ -9372,7 +9372,7 @@ const BACKEND_TIMEOUT_MS = 20000;
       const pillClass = p.status.toLowerCase() === 'active' ? 'green' : 'red';
       const isActive = p.status.toLowerCase() === 'active';
       const canWrite = !!(adm.access && adm.access.canWrite);
-      const canStatus = !!(adm.access && adm.access.canSetStatus);
+      const canStatus = !!(adm.access && (adm.access.canWrite || adm.access.canSetStatus));
       const weekoffOn = !!(adm.access && adm.access.weekoffEditEnabled);
       const today = admDateKey(new Date());
       const dataUser = ' data-user="' + admEsc(p.userId || p.gmail) + '" data-name="' + admEsc(p.name || p.gmail) + '"';
@@ -10344,7 +10344,7 @@ const BACKEND_TIMEOUT_MS = 20000;
     const list = document.getElementById('admLocList');
     if (!list) return;
     const q = String(adm.locQ || '').trim().toLowerCase();
-    const canChallenge = adm.access && adm.access.canChallenge;
+    const canChallenge = adm.access && (adm.access.canWrite || adm.access.canChallenge);
     const rows = adm.locations.filter(function(l) {
       return !q || (l.locationId + ' ' + l.locationName).toLowerCase().indexOf(q) !== -1;
     });
