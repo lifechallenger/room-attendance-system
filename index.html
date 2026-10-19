@@ -9021,7 +9021,7 @@ const BACKEND_TIMEOUT_MS = 20000;
     el.textContent = message;
     el.className = 'adm-toast' + (isError ? ' err' : '');
     clearTimeout(admToast.t);
-    admToast.t = setTimeout(function() { el.className = 'adm-toast hidden'; }, isError ? 5000 : 2600);
+    admToast.t = setTimeout(function() { el.className = 'adm-toast hidden'; }, isError ? 5000 : Math.min(9000, Math.max(2600, String(message).length * 45)));
   }
 
   function admFail(err) {
@@ -9088,7 +9088,7 @@ const BACKEND_TIMEOUT_MS = 20000;
 
   function admOpen() {
     if (!adm.access) return;
-    document.getElementById('admRole').textContent = adm.access.role + (adm.access.canWrite ? '' : ' · read only');
+    document.getElementById('admRole').textContent = adm.access.role + (adm.access.canWrite || adm.access.role === 'Supervisor' ? '' : ' · read only');
     admBuildTabs();
     /* Tabs such as Penalties appear later (on the penalty start date): pick that up without a reload. */
     selfServiceJsonp('adminWhoAmI').then(function(res) {
@@ -9372,9 +9372,10 @@ const BACKEND_TIMEOUT_MS = 20000;
       const pillClass = p.status.toLowerCase() === 'active' ? 'green' : 'red';
       const isActive = p.status.toLowerCase() === 'active';
       const canWrite = !!(adm.access && adm.access.canWrite);
+      const canStatus = !!(adm.access && adm.access.canSetStatus);
       const weekoffOn = !!(adm.access && adm.access.weekoffEditEnabled);
       const today = admDateKey(new Date());
-      const dataUser = ' data-user="' + admEsc(p.userId) + '" data-name="' + admEsc(p.name || p.gmail) + '"';
+      const dataUser = ' data-user="' + admEsc(p.userId || p.gmail) + '" data-name="' + admEsc(p.name || p.gmail) + '"';
       const hasId = !!p.hasUserId;
       const statusBtn = '<button type="button" class="adm-btn ' + (isActive ? 'warn' : 'ok') + ' block' + '" data-set-status="' + (isActive ? 'Inactive' : 'Active') + '"' + dataUser + ' data-hold="' + (r.manualHoldDays || 0) + '">' + (isActive ? 'Mark inactive' : 'Mark active') + '</button>';
       const weekoffBtn = weekoffOn ? '<button type="button" class="adm-btn alt" data-set-weekoff="1"' + dataUser + ' data-current="' + admEsc(p.weekoff || '') + '">Change weekoff</button>' : '';
@@ -9398,8 +9399,9 @@ const BACKEND_TIMEOUT_MS = 20000;
         (p.workSite ? ' · Work Site: ' + admEsc(p.workSite) : '') + '</div>' +
         (r.statusNote ? '<div class="adm-mut adm-mt">Status note: ' + admEsc(r.statusNote.reason) + '</div>' : '') +
         (r.statusNote && r.statusNote.holdUntil && r.statusNote.holdUntil >= today ? '<div class="adm-mut">Automatic status changes are paused until ' + admNiceDate(r.statusNote.holdUntil) + '.</div>' : '') +
-        (canWrite && hasId ? '<div class="adm-mt">' + statusBtn + '</div><div class="' + (weekoffOn ? 'adm-row2' : 'adm-mt') + '">' + shiftBtn + weekoffBtn + '</div>' : '') +
-        (canWrite && !hasId ? '<div class="adm-note adm-mt">This person has no User ID yet, so status, shift and weekoff cannot be changed from here. They need to apply and sign the offer letter in the Awign app first.</div>' : '') +
+        (canStatus ? '<div class="adm-mt">' + statusBtn + '</div>' : '') +
+        (canStatus ? '<div class="' + (weekoffOn ? 'adm-row2' : 'adm-mt') + '">' + shiftBtn + weekoffBtn + '</div>' : '') +
+        (!hasId ? '<div class="adm-note adm-mt">This person has not applied in the Awign app yet (no User ID). ' + (canStatus ? 'You can still change status, shift and weekoff here, but ' : '') + 'some features will not work for them until they apply and sign the offer letter.</div>' : '') +
 
         '<details><summary>Penalties, last 45 days (' + r.penalties.length + ')</summary>' +
         mini(r.penalties, function(x) {
@@ -10342,7 +10344,7 @@ const BACKEND_TIMEOUT_MS = 20000;
     const list = document.getElementById('admLocList');
     if (!list) return;
     const q = String(adm.locQ || '').trim().toLowerCase();
-    const canWrite = adm.access && adm.access.canWrite;
+    const canChallenge = adm.access && adm.access.canChallenge;
     const rows = adm.locations.filter(function(l) {
       return !q || (l.locationId + ' ' + l.locationName).toLowerCase().indexOf(q) !== -1;
     });
@@ -10360,7 +10362,7 @@ const BACKEND_TIMEOUT_MS = 20000;
           (c.differenceMeters !== '' && c.differenceMeters != null ? ' &middot; ' + admEsc(c.differenceMeters) + ' m from current' : '') +
           (c.mapLink ? ' &middot; <a href="' + admEsc(c.mapLink) + '" target="_blank" rel="noopener">Google Maps link</a>' : '') +
           (c.reason ? '<div class="adm-mut">' + admEsc(c.reason) + '</div>' : '') + '</div>' : '') +
-        (canWrite ? '<div class="adm-row2"><button type="button" class="adm-btn alt" data-loc-open="' + admEsc(l.locationId) + '">Challenge lat/long</button></div>' : '') +
+        (canChallenge ? '<div class="adm-row2"><button type="button" class="adm-btn alt" data-loc-open="' + admEsc(l.locationId) + '">Challenge lat/long</button></div>' : '') +
         '</div>';
     }).join('') : '<div class="adm-empty">No locations match.</div>';
   }
@@ -10539,7 +10541,7 @@ const BACKEND_TIMEOUT_MS = 20000;
       adm.requestId = admNewId();
       adm.wfAdded += 1;
       ['admWfName', 'admWfGmail', 'admWfMobile'].forEach(function(id) { document.getElementById(id).value = ''; });
-      msg.className = 'adm-good adm-mt';
+      msg.className = (res.warnings && res.warnings.length ? 'adm-bad' : 'adm-good') + ' adm-mt';
       msg.textContent = res.message + (adm.wfAdded > 1 ? ' (' + adm.wfAdded + ' added in this session)' : '') + ' You can add the next person.';
       admToast(res.message);
       adm.home = null;
