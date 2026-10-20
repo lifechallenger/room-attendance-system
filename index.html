@@ -1027,6 +1027,26 @@ body.adm-no-employee #weekoffInfo { display: none !important; }
 @media (max-width: 380px) {
   .employee-tools-row.row-main { grid-template-columns: 1fr 1fr 40px; }
 }
+/* ---- application status (top of the app) ---- */
+.apply-box { margin: 0 0 14px; }
+.apply-box.hidden { display: none; }
+.apply-red { background: #7f1d1d; color: #fff; border-radius: 14px; padding: 16px 16px 14px; box-shadow: 0 2px 8px rgba(127,29,29,.35); }
+.apply-red h2 { margin: 0 0 6px; font-size: 19px; line-height: 1.25; }
+.apply-red p { margin: 6px 0 0; font-size: 15px; line-height: 1.4; }
+.apply-red .apply-wait { background: rgba(255,255,255,.14); border-radius: 10px; padding: 9px 11px; margin-top: 10px; font-size: 14px; }
+.apply-actions { display: grid; gap: 8px; margin-top: 12px; }
+.apply-btn { display: block; width: 100%; box-sizing: border-box; min-height: 46px; border: 0; border-radius: 10px; font: inherit; font-weight: 700; font-size: 16px; text-align: center; text-decoration: none; padding: 12px; cursor: pointer; background: #fff; color: #7f1d1d; }
+.apply-btn.ghost { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,.7); font-weight: 600; }
+.apply-green { background: #e6f4ea; color: #0d5128; border-radius: 14px; padding: 14px 16px; border: 1px solid #b7dfc3; }
+.apply-green h2 { margin: 0 0 8px; font-size: 17px; }
+.apply-row { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; border-top: 1px solid #c9e6d2; font-size: 15px; }
+.apply-row span { color: #3b6b4c; }
+.apply-row b { text-align: right; word-break: break-all; }
+.apply-video { margin-top: 12px; }
+.apply-video video, .apply-video iframe { width: 100%; border: 0; border-radius: 10px; background: #000; aspect-ratio: 16 / 9; }
+.apply-video .apply-btn { margin-top: 8px; }
+.apply-hint { font-size: 13px; opacity: .85; margin-top: 6px; line-height: 1.35; }
+.apply-wait.hidden { display: none; }
 </style>
 </head>
 
@@ -1044,6 +1064,10 @@ body.adm-no-employee #weekoffInfo { display: none !important; }
     </p>
 
   </div>
+
+
+  <!-- Application status: shown after sign-in, at the very top -->
+  <div id="applyStatusBox" class="apply-box hidden" aria-live="polite"></div>
 
 
   <!-- =====================================================
@@ -4019,6 +4043,10 @@ var qrcode = function() {
    * after the backend communication layer is added.
    */
 
+/* Where a new person applies, and the how-to video shown with it (leave the video blank to keep it hidden). */
+const APPLY_URL = 'https://www.awign.com/categories/digital_gigs/jobs/axis_ai_data_collection';
+const APPLY_VIDEO_URL = '';
+
 const APPS_SCRIPT_URL =
   'https://script.google.com/macros/s/AKfycbzh3ZXoAjNHuyyQa2ttNubqYn_NGFas0_W70G20cbWC_AbpRA0RxnEGFa-HATASQf2Utg/exec';
 
@@ -4288,6 +4316,7 @@ const BACKEND_TIMEOUT_MS = 20000;
      */
     revealEmployeeUi_();
 
+    loadApplicationStatus_();
     loadSelfServiceBootstrap();
     loadEmployeeSummaryOnly();
     adminCheckAccess_();
@@ -4306,6 +4335,143 @@ const BACKEND_TIMEOUT_MS = 20000;
     }
 
   }
+
+
+  /* =====================================================
+     APPLICATION STATUS
+     Whether the signed-in Gmail has applied on the Awign job page
+     (answered from the Application tab). Nothing but the applied
+     email, mobile number and user id is ever shown.
+     ===================================================== */
+
+  function applyEsc_(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, function(c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function applyVideoHtml_() {
+
+    const url = String(APPLY_VIDEO_URL || '').trim();
+
+    if (!/^https:\/\//i.test(url)) return '';
+
+    const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([\w-]{11})/);
+
+    let player;
+
+    if (yt) {
+      player = '<iframe src="https://www.youtube.com/embed/' + yt[1] + '?playsinline=1" title="How to apply" allow="picture-in-picture; fullscreen" allowfullscreen></iframe>';
+    } else if (/\.(mp4|webm|ogg|mov)(\?|#|$)/i.test(url)) {
+      player = '<video id="applyVideoEl" controls playsinline autopictureinpicture preload="metadata" src="' + applyEsc_(url) + '"></video>' +
+        ((document.pictureInPictureEnabled) ? '<button type="button" class="apply-btn ghost" id="applyPipBtn">Keep the video on screen while I apply</button><div class="apply-hint">Plays the video in a small floating window, so you can keep watching it while you fill in the application on the Awign page.</div>' : '');
+    } else {
+      player = '<a class="apply-btn ghost" href="' + applyEsc_(url) + '" target="_blank" rel="noopener">Open the video</a>';
+    }
+
+    return '<button type="button" class="apply-btn ghost" id="applyVideoToggle">&#9654; How to apply and sign the offer letter</button>' +
+      '<div id="applyVideoWrap" class="apply-video hidden">' + player + '</div>';
+  }
+
+  function renderApplicationStatus_(res) {
+
+    const box = document.getElementById('applyStatusBox');
+    if (!box) return;
+
+    if (!res || res.success !== true || res.registered === false || res.exempt) {
+      box.className = 'apply-box hidden';
+      box.innerHTML = '';
+      return;
+    }
+
+    if (res.applied) {
+
+      box.innerHTML =
+        '<div class="apply-green"><h2>&#10003; You have applied</h2>' +
+        '<div class="apply-row"><span>Email</span><b>' + applyEsc_(res.email) + '</b></div>' +
+        '<div class="apply-row"><span>Mobile number</span><b>' + applyEsc_(res.mobile) + '</b></div>' +
+        '<div class="apply-row"><span>User ID</span><b>' + applyEsc_(res.userId || 'Pending') + '</b></div></div>';
+
+    } else {
+
+      box.innerHTML =
+        '<div class="apply-red"><h2>You have not applied yet</h2>' +
+        '<p>Please apply on the Awign job page and sign the offer letter. Without this, your payout can&#39;t be availed.</p>' +
+        '<div class="apply-wait">After applying, please wait 2 hours for this notification to update.</div>' +
+        '<div class="apply-actions">' +
+        '<a class="apply-btn" href="' + applyEsc_(APPLY_URL) + '" target="_blank" rel="noopener">Apply now</a>' +
+        applyVideoHtml_() +
+        '<button type="button" class="apply-btn ghost" id="applyRecheck">I have applied: check now</button>' +
+        '<div id="applyRecheckMsg" class="apply-wait hidden" role="status"></div>' +
+        '</div></div>';
+    }
+
+    box.className = 'apply-box';
+  }
+
+  function loadApplicationStatus_(fresh) {
+
+    if (!googleIdToken) return Promise.resolve(null);
+
+    return selfServiceJsonp('getApplicationStatus', fresh ? { fresh: true } : {})
+      .then(function(res) {
+        renderApplicationStatus_(res);
+        return res;
+      })
+      .catch(function() { /* the rest of the app still works without this banner */ return null; });
+
+  }
+
+  /* "I have applied: check now": show the green confirmation if found, otherwise ask them to come back later. */
+  function recheckApplication_() {
+
+    const btn = document.getElementById('applyRecheck');
+    const msg = document.getElementById('applyRecheckMsg');
+    if (!btn || btn.disabled) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Checking…';
+    if (msg) msg.classList.add('hidden');
+
+    loadApplicationStatus_(true).then(function(res) {
+
+      if (res && res.success && res.registered !== false && res.applied) return; /* the box has become the green confirmation */
+
+      const again = document.getElementById('applyRecheck');
+      const note = document.getElementById('applyRecheckMsg');
+      if (again) { again.disabled = false; again.textContent = 'I have applied: check now'; }
+      if (note) {
+        note.textContent = res && res.success ? 'Check back after 2 hours.' : 'Could not check right now. Please try again in a moment.';
+        note.classList.remove('hidden');
+      }
+
+    });
+
+  }
+
+  document.addEventListener('click', function(e) {
+
+    const toggle = e.target.closest && e.target.closest('#applyVideoToggle');
+    if (toggle) {
+      const wrap = document.getElementById('applyVideoWrap');
+      if (wrap) wrap.classList.toggle('hidden');
+      return;
+    }
+
+    if (e.target.closest && e.target.closest('#applyPipBtn')) {
+      const video = document.getElementById('applyVideoEl');
+      if (video && video.requestPictureInPicture) {
+        video.play().catch(function() {});
+        video.requestPictureInPicture().catch(function() {});
+      }
+      return;
+    }
+
+    if (e.target.closest && e.target.closest('#applyRecheck')) {
+      recheckApplication_();
+    }
+
+  });
 
 
   /*
@@ -9408,18 +9574,12 @@ const BACKEND_TIMEOUT_MS = 20000;
       }
 
       const pillClass = p.status.toLowerCase() === 'active' ? 'green' : 'red';
-      const isActive = p.status.toLowerCase() === 'active';
-      const canWrite = !!(adm.access && adm.access.canWrite);
-      const canStatus = !!(adm.access && (adm.access.canWrite || adm.access.canSetStatus));
-      const weekoffOn = !!(adm.access && adm.access.weekoffEditEnabled);
       const today = admDateKey(new Date());
-      const dataUser = ' data-user="' + admEsc(p.userId || p.gmail) + '" data-name="' + admEsc(p.name || p.gmail) + '"';
       const hasId = !!p.hasUserId;
-      const statusBtn = '<button type="button" class="adm-btn ' + (isActive ? 'warn' : 'ok') + ' block' + '" data-set-status="' + (isActive ? 'Inactive' : 'Active') + '"' + dataUser + ' data-hold="' + (r.manualHoldDays || 0) + '">' + (isActive ? 'Mark inactive' : 'Mark active') + '</button>';
-      const weekoffBtn = weekoffOn ? '<button type="button" class="adm-btn alt" data-set-weekoff="1"' + dataUser + ' data-current="' + admEsc(p.weekoff || '') + '">Change weekoff</button>' : '';
-      adm.shiftOptions = r.shiftOptions || [];
-      const shiftBtn = '<button type="button" class="adm-btn alt' + (weekoffOn ? '' : ' block') + '" data-set-shift="1"' + dataUser + ' data-current="' + admEsc(p.shiftId || '') + '">Change shift</button>';
-
+      const canStatus = !!(adm.access && (adm.access.canWrite || adm.access.canSetStatus));
+      const isAdminRole = !!(adm.access && adm.access.role === 'Admin');
+      const supervisorLocked = !isAdminRole && p.isSupervisor;
+      const hasIdOrAdmin = !supervisorLocked && (hasId || (adm.access && adm.access.role !== 'Supervisor'));
       admOpenSheet(
         '<div class="adm-line"><h3>' + admEsc(p.name || p.gmail) + '</h3><button type="button" class="adm-icon-btn" data-sheet-close="1">&#10005;</button></div>' +
         '<div class="adm-mut">' + admEsc(p.userId || 'No User ID yet') + ' · ' + admEsc(p.gmail) + '</div>' +
@@ -9437,9 +9597,10 @@ const BACKEND_TIMEOUT_MS = 20000;
         (p.workSite ? ' · Work Site: ' + admEsc(p.workSite) : '') + '</div>' +
         (r.statusNote ? '<div class="adm-mut adm-mt">Status note: ' + admEsc(r.statusNote.reason) + '</div>' : '') +
         (r.statusNote && r.statusNote.holdUntil && r.statusNote.holdUntil >= today ? '<div class="adm-mut">Automatic status changes are paused until ' + admNiceDate(r.statusNote.holdUntil) + '.</div>' : '') +
-        (canStatus ? '<div class="adm-mt">' + statusBtn + '</div>' : '') +
-        (canStatus ? '<div class="' + (weekoffOn ? 'adm-row2' : 'adm-mt') + '">' + shiftBtn + weekoffBtn + '</div>' : '') +
-        (!hasId ? '<div class="adm-note adm-mt">This person has not applied in the Awign app yet (no User ID). ' + (canStatus ? 'You can still change status, shift and weekoff here, but ' : '') + 'some features will not work for them until they apply and sign the offer letter.</div>' : '') +
+        (canStatus && hasIdOrAdmin ? '<div class="adm-mt"><button type="button" class="adm-btn block" data-edit-person="' + admEsc(p.gmail) + '">Edit details</button></div>' : '') +
+        (canStatus && supervisorLocked ? '<div class="adm-note adm-mt">Only an Admin can edit a supervisor.</div>' : '') +
+        (canStatus && !supervisorLocked && !hasIdOrAdmin ? '<div class="adm-note adm-mt">You can edit this person once they have a User ID (after they apply and sign the offer letter in the Awign app). Ask an Admin to change them before that.</div>' : '') +
+        (!hasId && !p.isSupervisor && hasIdOrAdmin ? '<div class="adm-note adm-mt">This person has not applied in the Awign app yet (no User ID). ' + (canStatus ? 'You can still edit their details here, but ' : '') + 'some features will not work for them until they apply and sign the offer letter.</div>' : '') +
 
         '<details><summary>Penalties, last 45 days (' + r.penalties.length + ')</summary>' +
         mini(r.penalties, function(x) {
@@ -9645,196 +9806,6 @@ const BACKEND_TIMEOUT_MS = 20000;
   }
 
   /* ---------- Status and weekoff changes (from the employee sheet) ---------- */
-
-  function admStatusOpen(el) {
-
-    const target = el.getAttribute('data-set-status');
-    const userId = el.getAttribute('data-user');
-    const name = el.getAttribute('data-name');
-    const hold = Number(el.getAttribute('data-hold')) || 0;
-
-    adm.requestId = admNewId();
-
-    admOpenSheet(
-      '<div class="adm-line"><h3>Mark ' + admEsc(name) + ' ' + target.toLowerCase() + '?</h3><button type="button" class="adm-icon-btn" data-sheet-close="1">&#10005;</button></div>' +
-      '<div class="adm-mut adm-mt">' +
-      (target === 'Inactive'
-        ? 'They will lose access to attendance and self-service, and will not be switched back on automatically.'
-        : 'They regain access straight away.' +
-          (hold > 0 ? ' The daily status sync will leave them alone for ' + hold + ' days so they are not switched back before they have punched in.' : '')) +
-      '</div>' +
-      '<textarea id="admReason" class="adm-textarea adm-mt" placeholder="Reason (required, kept in the audit log)"></textarea>' +
-      '<div id="admSheetMsg" class="adm-bad adm-mt"></div>' +
-      '<div class="adm-row2"><button type="button" class="adm-btn alt" data-sheet-close="1">Cancel</button>' +
-      '<button type="button" id="admConfirmBtn" class="adm-btn ' + (target === 'Active' ? 'ok' : 'warn') + '" data-confirm-status="' + target + '" data-user="' + admEsc(userId) + '">' +
-      (target === 'Active' ? 'Mark active' : 'Mark inactive') + '</button></div>'
-    );
-
-  }
-
-  async function admStatusSubmit(el) {
-
-    if (adm.busy) return;
-
-    const reason = document.getElementById('admReason').value.trim();
-    const msg = document.getElementById('admSheetMsg');
-
-    if (reason.length < 3) { msg.textContent = 'Please give a reason.'; return; }
-
-    adm.busy = true;
-    el.disabled = true;
-
-    const userId = el.getAttribute('data-user');
-
-    try {
-
-      const res = await admCall('adminSetUserStatus', {
-        requestId: adm.requestId,
-        userId: userId,
-        status: el.getAttribute('data-confirm-status'),
-        reason: reason
-      });
-
-      adm.requestId = null;
-      admCloseSheet();
-      admToast(res.message || 'Done.');
-      admEmployee(userId);
-
-    } catch (err) {
-      adm.busy = false;
-      el.disabled = false;
-      msg.textContent = err.message;
-    }
-
-  }
-
-  function admWeekoffOpen(el) {
-
-    const userId = el.getAttribute('data-user');
-    const name = el.getAttribute('data-name');
-    const current = el.getAttribute('data-current') || '';
-
-    adm.requestId = admNewId();
-
-    const days = ['', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
-    admOpenSheet(
-      '<div class="adm-line"><h3>Weekoff for ' + admEsc(name) + '</h3><button type="button" class="adm-icon-btn" data-sheet-close="1">&#10005;</button></div>' +
-      '<div class="adm-mut adm-mt">Applies from today. Earlier days keep the previous weekoff.</div>' +
-      '<select id="admWeekoffPick" class="adm-select adm-mt">' +
-      days.map(function(d) { return '<option value="' + d + '"' + (d === current ? ' selected' : '') + '>' + (d || 'Not set') + '</option>'; }).join('') +
-      '</select>' +
-      '<textarea id="admReason" class="adm-textarea adm-mt" placeholder="Reason (required, kept in the audit log)"></textarea>' +
-      '<div id="admSheetMsg" class="adm-bad adm-mt"></div>' +
-      '<div class="adm-row2"><button type="button" class="adm-btn alt" data-sheet-close="1">Cancel</button>' +
-      '<button type="button" id="admConfirmBtn" class="adm-btn" data-confirm-weekoff="1" data-user="' + admEsc(userId) + '">Save weekoff</button></div>'
-    );
-
-  }
-
-  async function admWeekoffSubmit(el) {
-
-    if (adm.busy) return;
-
-    const reason = document.getElementById('admReason').value.trim();
-    const msg = document.getElementById('admSheetMsg');
-
-    if (reason.length < 3) { msg.textContent = 'Please give a reason.'; return; }
-
-    adm.busy = true;
-    el.disabled = true;
-
-    const userId = el.getAttribute('data-user');
-
-    try {
-
-      const res = await admCall('adminSetWeekoff', {
-        requestId: adm.requestId,
-        userId: userId,
-        weekoff: document.getElementById('admWeekoffPick').value,
-        reason: reason
-      });
-
-      adm.requestId = null;
-      admCloseSheet();
-      admToast(res.message || 'Done.');
-      admEmployee(userId);
-
-    } catch (err) {
-      adm.busy = false;
-      el.disabled = false;
-      msg.textContent = err.message;
-    }
-
-  }
-
-
-  function admShiftOpen(el) {
-
-    const userId = el.getAttribute('data-user');
-    const name = el.getAttribute('data-name');
-    const current = el.getAttribute('data-current') || '';
-    const options = adm.shiftOptions || [];
-
-    adm.requestId = admNewId();
-
-    admOpenSheet(
-      '<div class="adm-line"><h3>Shift for ' + admEsc(name) + '</h3><button type="button" class="adm-icon-btn" data-sheet-close="1">&#10005;</button></div>' +
-      '<div class="adm-mut adm-mt">Forecasts and shift lists pick this up on their next refresh. Late-punch rules use the current shift for the whole month.</div>' +
-      '<select id="admShiftPick" class="adm-select adm-mt">' +
-      (options.some(function(o) { return o.id === current; }) ? '' : '<option value="">Choose a shift</option>') +
-      options.map(function(o) { return '<option value="' + admEsc(o.id) + '"' + (o.id === current ? ' selected' : '') + '>' + admEsc(o.name) + '</option>'; }).join('') +
-      '</select>' +
-      '<textarea id="admReason" class="adm-textarea adm-mt" placeholder="Reason (required, kept in the audit log)"></textarea>' +
-      '<div id="admSheetMsg" class="adm-bad adm-mt"></div>' +
-      '<div class="adm-row2"><button type="button" class="adm-btn alt" data-sheet-close="1">Cancel</button>' +
-      '<button type="button" id="admConfirmBtn" class="adm-btn" data-confirm-shift="1" data-user="' + admEsc(userId) + '" data-current="' + admEsc(current) + '">Save shift</button></div>'
-    );
-
-  }
-
-  async function admShiftSubmit(el) {
-
-    if (adm.busy) return;
-
-    const reason = document.getElementById('admReason').value.trim();
-    const shiftId = document.getElementById('admShiftPick').value;
-    const msg = document.getElementById('admSheetMsg');
-
-    if (!shiftId) { msg.textContent = 'Choose a shift.'; return; }
-    if (shiftId === el.getAttribute('data-current')) { msg.textContent = 'That is already their shift.'; return; }
-    if (reason.length < 3) { msg.textContent = 'Please give a reason.'; return; }
-
-    adm.busy = true;
-    el.disabled = true;
-
-    const userId = el.getAttribute('data-user');
-
-    try {
-
-      const res = await admCall('adminSetShift', {
-        requestId: adm.requestId,
-        userId: userId,
-        shiftId: shiftId,
-        reason: reason
-      });
-
-      adm.requestId = null;
-      admCloseSheet();
-      admToast(res.message || 'Done.');
-      admEmployee(userId);
-
-    } catch (err) {
-      adm.busy = false;
-      el.disabled = false;
-      msg.textContent = err.message;
-    }
-
-  }
-
-  /* ---------- Penalties ---------- */
-
-  const ADM_PENALTY_TYPES = ['Late Punch', 'Uninformed Leave', 'Uninformed Excess', 'Attendance Not Marked', 'Leave Application', 'Resignation', 'Long Leave'];
 
   function admPenalties() {
 
@@ -10511,6 +10482,124 @@ const BACKEND_TIMEOUT_MS = 20000;
     }
   }
 
+  /* ---------- Edit a person (Employee Master) ---------- */
+  async function admEditOpen(gmail) {
+
+    admOpenSheet('<div class="adm-empty">Loading&hellip;</div>');
+
+    try {
+
+      const res = await admCall('adminPersonEditForm', { gmail: gmail });
+      const v = res.values;
+      adm.editOrig = v;
+      adm.editGmail = gmail;
+      adm.requestId = admNewId();
+
+      const shifts = (res.shifts || []).slice();
+      if (v.shift && shifts.indexOf(v.shift) === -1) shifts.unshift(v.shift);
+
+      admOpenSheet(
+        '<div class="adm-line"><h3>Edit details</h3><button type="button" class="adm-icon-btn" data-sheet-close="1">&#10005;</button></div>' +
+        '<div class="adm-mut adm-mt">Saved to Employee Master (row ' + res.row + '). The attendance app picks changes up when the Users tab refreshes, usually within a few minutes.</div>' +
+        '<div class="adm-h">Name</div><input id="admEdName" class="adm-input" type="text" autocomplete="off" value="' + admEsc(v.name) + '">' +
+        '<div class="adm-h">Awign registered Gmail</div><input id="admEdGmail" class="adm-input" type="email" inputmode="email" autocomplete="off" autocapitalize="off" value="' + admEsc(v.gmail) + '">' +
+        '<div id="admEdGmailNote" class="adm-mut"></div>' +
+        '<div class="adm-h">Mobile number used in the app</div><input id="admEdMobile" class="adm-input" type="tel" inputmode="numeric" autocomplete="off" value="' + admEsc(v.mobile) + '">' +
+        '<div class="adm-h">Shift</div>' + admWfSelect('admEdShift', shifts, v.shift) +
+        '<div class="adm-h">Weekoff day</div>' + admWfSelect('admEdWeekoff', ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'], v.weekoff, 'None') +
+        '<div class="adm-h">Supervisor</div><input id="admEdSupervisor" class="adm-input" type="text" list="admEdSupList" autocomplete="off" value="' + admEsc(v.supervisor) + '"><datalist id="admEdSupList">' +
+        (res.supervisors || []).map(function(n) { return '<option value="' + admEsc(n) + '"></option>'; }).join('') + '</datalist>' +
+        '<div class="adm-row2">' +
+        '<div><div class="adm-h">Is resident</div>' + admWfSelect('admEdResident', ['No', 'Yes'], v.isResident) + '</div>' +
+        '<div><div class="adm-h">Is supervisor</div>' + admWfSelect('admEdIsSup', ['No', 'Yes'], v.isSupervisor) + '</div></div>' +
+        '<div class="adm-h">Status</div>' + admWfSelect('admEdStatus', ['Active', 'Inactive'], v.status) +
+        '<div class="adm-h">Reason for the change</div><input id="admEdReason" class="adm-input" type="text" placeholder="Required" autocomplete="off">' +
+        '<div id="admSheetMsg" class="adm-bad adm-mt"></div>' +
+        '<div class="adm-row2"><button type="button" class="adm-btn alt" data-sheet-close="1">Close</button>' +
+        '<button type="button" id="admConfirmBtn" class="adm-btn" data-confirm-edit="1">Save changes</button></div>'
+      );
+
+      if (res.weekoffEditEnabled === false) {
+        document.getElementById('admEdWeekoff').disabled = true;
+      }
+
+      if (!adm.access || adm.access.role !== 'Admin') {
+        document.getElementById('admEdIsSup').disabled = true;
+      }
+
+      document.getElementById('admEdGmail').addEventListener('input', function() {
+        const changed = this.value.trim().toLowerCase() !== adm.editOrig.gmail;
+        document.getElementById('admEdGmailNote').textContent = changed
+          ? 'Their User ID follows their email, so they may need to apply again in the Awign app with the new email.'
+          : '';
+      });
+
+    } catch (err) {
+      admCloseSheet();
+      admFail(err);
+    }
+
+  }
+
+  async function admEditSubmit(el) {
+
+    if (adm.busy) return;
+
+    const msg = document.getElementById('admSheetMsg');
+    const get = function(id) { return document.getElementById(id).value.trim(); };
+    const o = adm.editOrig;
+    const now = {
+      name: get('admEdName'), newGmail: get('admEdGmail').toLowerCase(), mobile: get('admEdMobile'),
+      shift: get('admEdShift'), weekoff: get('admEdWeekoff'), supervisor: get('admEdSupervisor'),
+      isResident: get('admEdResident'), isSupervisor: get('admEdIsSup'), status: get('admEdStatus')
+    };
+    const original = {
+      name: o.name, newGmail: o.gmail, mobile: o.mobile, shift: o.shift, weekoff: o.weekoff,
+      supervisor: o.supervisor, isResident: o.isResident, isSupervisor: o.isSupervisor, status: o.status
+    };
+    const payload = { gmail: adm.editGmail, requestId: adm.requestId, reason: get('admEdReason') };
+    let count = 0;
+
+    Object.keys(now).forEach(function(k) {
+      if (now[k] !== original[k]) { payload[k] = now[k]; count++; }
+    });
+
+    msg.className = 'adm-bad adm-mt';
+
+    if (!count) { msg.textContent = 'Nothing has been changed.'; return; }
+    if (payload.name !== undefined && payload.name.length < 2) { msg.textContent = 'Enter the name.'; return; }
+    if (payload.newGmail !== undefined && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.newGmail)) { msg.textContent = 'Enter a valid Gmail.'; return; }
+    if (payload.mobile !== undefined && payload.mobile.replace(/\D/g, '').length < 10) { msg.textContent = 'Enter the 10-digit mobile number.'; return; }
+    if (payload.reason.length < 3) { msg.textContent = 'Give a reason for the change.'; return; }
+
+    adm.busy = true;
+    el.disabled = true;
+    msg.textContent = '';
+
+    try {
+      const res = await admCall('adminEditPerson', payload);
+      adm.busy = false;
+      adm.home = null;
+      msg.className = (res.warnings && res.warnings.length ? 'adm-bad' : 'adm-good') + ' adm-mt';
+      msg.textContent = res.message;
+      try { msg.scrollIntoView({ block: 'nearest' }); } catch (e) { /* older browsers */ }
+      admToast('Saved.');
+      /* The saved values are the new baseline, so a second save only sends what changes next. */
+      Object.keys(now).forEach(function(k) { original[k] = now[k]; });
+      adm.editOrig = { name: now.name, gmail: now.newGmail, mobile: now.mobile, shift: now.shift, weekoff: now.weekoff, supervisor: now.supervisor, isResident: now.isResident, isSupervisor: now.isSupervisor, status: now.status };
+      adm.editGmail = now.newGmail;
+      adm.requestId = admNewId();
+      document.getElementById('admEdReason').value = '';
+      el.disabled = false;
+    } catch (err) {
+      adm.busy = false;
+      el.disabled = false;
+      msg.textContent = err.message;
+      try { msg.scrollIntoView({ block: 'nearest' }); } catch (e) { /* older browsers */ }
+    }
+
+  }
+
   /* ---------- Add workforce (Employee Master) ---------- */
   function admWfSelect(id, options, selected, firstLabel) {
     return '<select id="' + id + '" class="adm-select">' +
@@ -10540,6 +10629,10 @@ const BACKEND_TIMEOUT_MS = 20000;
       '<div class="adm-row2"><button type="button" class="adm-btn alt" data-sheet-close="1">Close</button>' +
       '<button type="button" id="admConfirmBtn" class="adm-btn" data-confirm-wfadd="1">Add to Employee Master</button></div>'
     );
+    if (!adm.access || adm.access.role !== 'Admin') {
+      const sup = document.getElementById('admWfIsSup');
+      if (sup) sup.disabled = true;
+    }
     admCall('adminWorkforceOptions').then(function(res) {
       const shift = document.getElementById('admWfShift');
       if (!shift) return;
@@ -10678,12 +10771,8 @@ const BACKEND_TIMEOUT_MS = 20000;
       if (e.target.closest('[data-loc-here]')) return admLocHere();
       if (e.target.closest('[data-loc-read]')) return admLocReadLink();
       if ((el = e.target.closest('[data-confirm-loc]'))) return admLocSubmit(el);
-      if ((el = e.target.closest('[data-set-status]'))) return admStatusOpen(el);
-      if ((el = e.target.closest('[data-set-weekoff]'))) return admWeekoffOpen(el);
-      if ((el = e.target.closest('[data-set-shift]'))) return admShiftOpen(el);
-      if ((el = e.target.closest('[data-confirm-shift]'))) return admShiftSubmit(el);
-      if ((el = e.target.closest('[data-confirm-status]'))) return admStatusSubmit(el);
-      if ((el = e.target.closest('[data-confirm-weekoff]'))) return admWeekoffSubmit(el);
+      if ((el = e.target.closest('[data-edit-person]'))) return admEditOpen(el.getAttribute('data-edit-person'));
+      if ((el = e.target.closest('[data-confirm-edit]'))) return admEditSubmit(el);
 
       if ((el = e.target.closest('[data-pen-user]'))) {
         adm.pen.q = el.getAttribute('data-pen-user');
