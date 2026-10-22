@@ -10498,6 +10498,10 @@ const BACKEND_TIMEOUT_MS = 20000;
       const shifts = (res.shifts || []).slice();
       if (v.shift && shifts.indexOf(v.shift) === -1) shifts.unshift(v.shift);
 
+      /* The list of supervisors to choose from; the person's current one stays selectable even if it is no longer listed. */
+      const supervisorChoices = (res.supervisors || []).slice();
+      if (v.supervisor && supervisorChoices.indexOf(v.supervisor) === -1) supervisorChoices.unshift(v.supervisor);
+
       admOpenSheet(
         '<div class="adm-line"><h3>Edit details</h3><button type="button" class="adm-icon-btn" data-sheet-close="1">&#10005;</button></div>' +
         '<div class="adm-mut adm-mt">Saved to Employee Master (row ' + res.row + '). The attendance app picks changes up when the Users tab refreshes, usually within a few minutes.</div>' +
@@ -10507,8 +10511,7 @@ const BACKEND_TIMEOUT_MS = 20000;
         '<div class="adm-h">Mobile number used in the app</div><input id="admEdMobile" class="adm-input" type="tel" inputmode="numeric" autocomplete="off" value="' + admEsc(v.mobile) + '">' +
         '<div class="adm-h">Shift</div>' + admWfSelect('admEdShift', shifts, v.shift) +
         '<div class="adm-h">Weekoff day</div>' + admWfSelect('admEdWeekoff', ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'], v.weekoff, 'None') +
-        '<div class="adm-h">Supervisor</div><input id="admEdSupervisor" class="adm-input" type="text" list="admEdSupList" autocomplete="off" value="' + admEsc(v.supervisor) + '"><datalist id="admEdSupList">' +
-        (res.supervisors || []).map(function(n) { return '<option value="' + admEsc(n) + '"></option>'; }).join('') + '</datalist>' +
+        '<div class="adm-h">Supervisor</div>' + admWfSelect('admEdSupervisor', supervisorChoices, v.supervisor, 'Not set') +
         '<div class="adm-row2">' +
         '<div><div class="adm-h">Is resident</div>' + admWfSelect('admEdResident', ['No', 'Yes'], v.isResident) + '</div>' +
         '<div><div class="adm-h">Is supervisor</div>' + admWfSelect('admEdIsSup', ['No', 'Yes'], v.isSupervisor) + '</div></div>' +
@@ -10620,7 +10623,7 @@ const BACKEND_TIMEOUT_MS = 20000;
       '<div class="adm-h">Shift</div>' + admWfSelect('admWfShift', [], '', 'Loading shifts...') +
       '<div class="adm-h">Weekoff day</div>' + admWfSelect('admWfWeekoff', ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'], '', 'Not set') +
       '<div class="adm-h">Supervisor</div>' +
-      '<input id="admWfSupervisor" class="adm-input" type="text" list="admWfSupList" placeholder="Supervisor name" autocomplete="off"><datalist id="admWfSupList"></datalist>' +
+      '<select id="admWfSupervisor" class="adm-select"><option value="">Not set</option></select>' +
       '<div class="adm-row2">' +
       '<div><div class="adm-h">Is resident</div>' + admWfSelect('admWfResident', ['No', 'Yes'], 'No') + '</div>' +
       '<div><div class="adm-h">Is supervisor</div>' + admWfSelect('admWfIsSup', ['No', 'Yes'], 'No') + '</div></div>' +
@@ -10638,7 +10641,8 @@ const BACKEND_TIMEOUT_MS = 20000;
       if (!shift) return;
       shift.innerHTML = '<option value="">Choose a shift</option>' +
         (res.shifts || []).map(function(n) { return '<option value="' + admEsc(n) + '">' + admEsc(n) + '</option>'; }).join('');
-      document.getElementById('admWfSupList').innerHTML = (res.supervisors || []).map(function(n) { return '<option value="' + admEsc(n) + '"></option>'; }).join('');
+      document.getElementById('admWfSupervisor').innerHTML = '<option value="">Not set</option>' +
+        (res.supervisors || []).map(function(n) { return '<option value="' + admEsc(n) + '">' + admEsc(n) + '</option>'; }).join('');
       if (res.employeeMasterReachable === false) document.getElementById('admWfWarn').textContent = res.message || 'Employee Master could not be reached.';
     }).catch(function(err) {
       const shift = document.getElementById('admWfShift');
