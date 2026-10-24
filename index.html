@@ -1045,6 +1045,38 @@ body.adm-no-employee #weekoffInfo { display: none !important; }
 .apply-video { margin-top: 12px; }
 .apply-video video, .apply-video iframe { width: 100%; border: 0; border-radius: 10px; background: #000; aspect-ratio: 16 / 9; }
 .apply-video .apply-btn { margin-top: 8px; }
+/* ---- next location card (worker home) ---- */
+.nl-box { margin: 0 0 14px; }
+.nl-box.hidden { display: none; }
+.nl-card { background: #fff; border: 1px solid #dfe3e8; border-radius: 14px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(60,64,67,.12); }
+.nl-card h2 { margin: 0 0 8px; font-size: 17px; }
+.nl-when { font-size: 13px; color: #5f6368; font-weight: 600; text-transform: uppercase; letter-spacing: .3px; }
+.nl-place { font-size: 20px; font-weight: 700; margin: 2px 0 2px; }
+.nl-sub { font-size: 14px; color: #5f6368; }
+.nl-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.nl-btn { display: block; box-sizing: border-box; min-height: 46px; padding: 11px 8px; border: 0; border-radius: 10px; font: inherit; font-weight: 700; font-size: 15px; text-align: center; text-decoration: none; background: #1a73e8; color: #fff; cursor: pointer; }
+.nl-btn.call { background: #188038; }
+.nl-btn.off { background: #e8eaed; color: #80868b; pointer-events: none; }
+.nl-warn { margin-top: 10px; background: #fef7e0; color: #7a4b00; border-radius: 10px; padding: 9px 11px; font-size: 14px; line-height: 1.35; border: 1px solid #f6dd9a; }
+.nl-hint { margin-top: 10px; border-radius: 10px; padding: 9px 11px; font-size: 14px; line-height: 1.35; font-weight: 600; }
+.nl-hint.at-new { background: #e6f4ea; color: #0d5128; }
+.nl-hint.at-old { background: #fef7e0; color: #7a4b00; }
+.nl-hint.moving { background: #e8f0fe; color: #174ea6; }
+.nl-hint.unknown { background: #f1f3f4; color: #3c4043; }
+.nl-hint small { display: block; font-weight: 500; opacity: .85; margin-top: 2px; }
+.nl-confirmed { display: inline-block; margin-top: 6px; font-size: 13px; font-weight: 700; color: #188038; }
+.nl-loc { font-size: 13px; font-weight: 600; color: #5f6368; margin-left: 4px; }
+.nl-addr { font-size: 14px; color: #3c4043; margin-top: 3px; line-height: 1.35; }
+.nl-pin { font-size: 13px; color: #3c4043; margin-top: 4px; }
+.nl-pin span { color: #5f6368; }
+.nl-divider { border-top: 1px solid #eceff1; margin: 12px 0 10px; }
+.adm-confirm { background: #fff; border: 2px solid #1a73e8; border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+.adm-confirm h3 { margin: 0 0 4px; font-size: 16px; }
+.adm-check { margin-top: 8px; border-radius: 10px; padding: 8px 10px; font-size: 14px; }
+.adm-check.good { background: #e6f4ea; color: #0d5128; }
+.adm-check.bad { background: #fce8e6; color: #a50e0e; }
+.adm-check.warn { background: #fef7e0; color: #7a4b00; }
+.adm-check.none { background: #f1f3f4; color: #3c4043; }
 .apply-hint { font-size: 13px; opacity: .85; margin-top: 6px; line-height: 1.35; }
 .apply-wait.hidden { display: none; }
 </style>
@@ -1068,6 +1100,9 @@ body.adm-no-employee #weekoffInfo { display: none !important; }
 
   <!-- Application status: shown after sign-in, at the very top -->
   <div id="applyStatusBox" class="apply-box hidden" aria-live="polite"></div>
+
+  <!-- Next location, supervisor contact and a hint about where the supervisor is -->
+  <div id="nextLocationBox" class="nl-box hidden" aria-live="polite"></div>
 
 
   <!-- =====================================================
@@ -4317,6 +4352,7 @@ const BACKEND_TIMEOUT_MS = 20000;
     revealEmployeeUi_();
 
     loadApplicationStatus_();
+    loadNextLocation_();
     loadSelfServiceBootstrap();
     loadEmployeeSummaryOnly();
     adminCheckAccess_();
@@ -4407,6 +4443,126 @@ const BACKEND_TIMEOUT_MS = 20000;
     }
 
     box.className = 'apply-box';
+  }
+
+  /* =====================================================
+     NEXT LOCATION (worker home) AND SUPERVISOR LOCATION CHECK
+     ===================================================== */
+
+  function nlDateLabel_(key) {
+    if (!key) return '';
+    const p = key.split('-').map(Number);
+    return new Date(p[0], p[1] - 1, p[2]).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  }
+
+  function nlCoords_(slot) {
+
+    if (!slot || slot.lat == null || slot.lng == null) return '';
+
+    const where = { phone: 'taken from your supervisor\u2019s phone at ' + (slot.pinAt || ''), link: 'from the map link', sheet: 'from the property list' }[slot.pinSource] || '';
+
+    return '<div class="nl-pin">Pin: <b>' + Number(slot.lat).toFixed(5) + ', ' + Number(slot.lng).toFixed(5) + '</b>' + (where ? ' <span>(' + applyEsc_(where) + ')</span>' : '') + '</div>';
+  }
+
+  /* One property: when, name, address, pin coordinates and its own Open location button. */
+  function nlPlaceHtml_(when, slot, emptyText) {
+
+    if (!slot) {
+      return '<div class="nl-when">' + applyEsc_(when) + '</div><div class="nl-sub">' + applyEsc_(emptyText) + '</div>';
+    }
+
+    return '<div class="nl-when">' + applyEsc_(when) + '</div>' +
+      '<div class="nl-place">' + applyEsc_(slot.property || 'Property') + (slot.locationId ? ' <span class="nl-loc">' + applyEsc_(slot.locationId) + '</span>' : '') + '</div>' +
+      '<div class="nl-addr">' + (slot.address ? '<b>Address:</b> ' + applyEsc_(slot.address) : '<i>Address not available. Use the map link and call your supervisor.</i>') + '</div>' +
+      nlCoords_(slot) +
+      (slot.link
+        ? '<a class="nl-btn" href="' + applyEsc_(slot.link) + '" target="_blank" rel="noopener" style="margin-top:10px">Open location</a>'
+        : '<span class="nl-btn off" style="margin-top:10px">No link yet</span>');
+  }
+
+  function renderNextLocation_(res) {
+
+    const box = document.getElementById('nextLocationBox');
+    if (!box) return;
+
+    if (!res || res.success !== true || res.applicable === false) {
+      box.className = 'nl-box hidden';
+      box.innerHTML = '';
+      return;
+    }
+
+    if (res.noSupervisor) {
+      box.innerHTML = '<div class="nl-card"><h2>Your location</h2><div class="nl-sub">No supervisor is linked to you yet. Please contact your Supervisor.</div></div>';
+      box.className = 'nl-box';
+      return;
+    }
+
+    const phone = res.supervisor && res.supervisor.phone ? res.supervisor.phone : '';
+
+    let html = '<div class="nl-card">';
+
+    if (res.nextPublished) {
+      html += nlPlaceHtml_('Your next location \u00B7 ' + nlDateLabel_(res.next.date), res.next, '');
+    } else {
+      html += '<div class="nl-when">Your next location</div><div class="nl-sub">Not published yet. Please check again later.</div>';
+    }
+
+    if (res.current) html += '<div class="nl-divider"></div>' + nlPlaceHtml_('Current location \u00B7 ' + nlDateLabel_(res.current.date), res.current, '');
+
+    html += '<div class="nl-row" style="grid-template-columns:1fr">' +
+      (phone
+        ? '<a class="nl-btn call" href="tel:' + applyEsc_(phone) + '">Call ' + applyEsc_(res.supervisor.name || 'supervisor') + '</a>'
+        : '<span class="nl-btn off">No phone number</span>') +
+      '</div>';
+
+    if (res.confirmedBySupervisor) html += '<div class="nl-confirmed">&#10003; Location confirmed by your supervisor</div>';
+
+    html += '<div class="nl-warn"><b>Please confirm the actual location link with your supervisor before you move.</b></div>';
+
+    if (res.hint) {
+      html += '<div class="nl-hint ' + applyEsc_(res.hint.state) + '">' + applyEsc_(res.hint.label) +
+        (res.hint.updatedAt ? '<small>Last update ' + applyEsc_(res.hint.updatedAt) + '</small>' : '') + '</div>';
+    }
+
+    html += '</div>';
+
+    box.innerHTML = html;
+    box.className = 'nl-box';
+  }
+
+  function loadNextLocation_() {
+
+    if (!googleIdToken) return Promise.resolve(null);
+
+    return selfServiceJsonp('getNextLocation')
+      .then(function(res) { renderNextLocation_(res); return res; })
+      .catch(function() { return null; });
+  }
+
+  /*
+   * Supervisors only: when the app opens, report where the phone is (once every 10 minutes at most) so the
+   * location check and the hint shown to workers have something current. Nothing is shown to the supervisor.
+   */
+  function reportSupervisorLocation_() {
+
+    if (!navigator.geolocation || !googleIdToken) return;
+
+    try {
+      const last = Number(localStorage.getItem('supLocAt') || 0);
+      if (Date.now() - last < 10 * 60 * 1000) return;
+    } catch (e) { /* storage may be blocked */ }
+
+    navigator.geolocation.getCurrentPosition(function(pos) {
+
+      try { localStorage.setItem('supLocAt', String(Date.now())); } catch (e) { /* ignore */ }
+
+      selfServiceJsonp('submitSupervisorLocation', {
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+        accuracy: pos.coords.accuracy
+      }).catch(function() {});
+
+    }, function() { /* no permission or no signal: nothing to report */ }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
   }
 
   function loadApplicationStatus_(fresh) {
@@ -4735,6 +4891,8 @@ const BACKEND_TIMEOUT_MS = 20000;
         }
 
         mergeSelfServiceConfig_(result);
+
+        if (result.user && result.user.isSupervisor) reportSupervisorLocation_();
 
         setWorkSiteAssignmentButtonVisibility_(result.workSiteAssignmentRegistered);
         selfServiceBootstrapReady = true;
@@ -9352,6 +9510,53 @@ const BACKEND_TIMEOUT_MS = 20000;
     return '<div class="adm-stats">' + bits.join('') + '</div>';
   }
 
+  function admConfirmCardHtml_(c) {
+
+    if (!c) return '';
+
+    const a = c.autoCheck;
+    let check;
+
+    if (!a) {
+      check = '<div class="adm-check none">No location check yet. Open the attendance app on your phone while you are at this property and allow location.</div>';
+    } else if (a.result === 'Looks correct') {
+      check = '<div class="adm-check good">&#10003; Your phone was within ' + admEsc(c.radius) + ' m of this pin (' + admEsc(a.at) + ').</div>';
+    } else if (a.result === 'Check this') {
+      check = '<div class="adm-check bad">Your phone was about ' + admEsc(a.distance) + ' m from this pin (' + admEsc(a.at) + '). Check the pin before you confirm.</div>';
+    } else if (a.result === 'Low GPS accuracy') {
+      check = '<div class="adm-check warn">Your phone\u2019s GPS was not accurate enough to check the pin (' + admEsc(a.at) + '). Try again in an open area.</div>';
+    } else {
+      check = '<div class="adm-check none">' + admEsc(a.result) + '</div>';
+    }
+
+    return '<div class="adm-confirm" id="admConfirmCard">' +
+      '<h3>Confirm today\u2019s location</h3>' +
+      '<div><b>' + admEsc(c.property || 'Property') + '</b> \u00B7 ' + admEsc(c.locationId) + '</div>' +
+      (c.link ? '<div class="adm-mt"><a class="adm-linkish" href="' + admEsc(c.link) + '" target="_blank" rel="noopener">Open the location link</a></div>' : '<div class="adm-bad adm-mt">No location link on file.</div>') +
+      check +
+      '<div class="adm-row2"><button type="button" class="adm-btn ok" data-confirm-location="1">Location is correct</button>' +
+      '<button type="button" class="adm-btn alt" data-wrong-location="' + admEsc(c.locationId) + '">It is wrong</button></div></div>';
+  }
+
+  async function admConfirmLocation(el) {
+
+    if (adm.busy) return;
+    adm.busy = true;
+    el.disabled = true;
+
+    try {
+      const res = await admCall('adminConfirmLocation', { requestId: admNewId() });
+      adm.busy = false;
+      admToast(res.message || 'Confirmed.');
+      const card = document.getElementById('admConfirmCard');
+      if (card) card.remove();
+    } catch (err) {
+      adm.busy = false;
+      el.disabled = false;
+      admFail(err);
+    }
+  }
+
   async function admHome() {
 
     admBody('<div class="adm-empty">Loading&hellip;</div>');
@@ -9388,6 +9593,7 @@ const BACKEND_TIMEOUT_MS = 20000;
         : '';
 
       admBody(
+        admConfirmCardHtml_(o.confirm) +
         (scope ? '<div class="adm-note">' + admEsc(scope) + '</div>' : '') +
         '<div class="adm-mut" style="margin-bottom:8px">Today ' + admNiceDate(o.today) + ' &middot; ' + o.totals.people + ' active people &middot; ' + o.totals.present + ' checked in</div>' +
         (pendingTotal
@@ -10701,6 +10907,12 @@ const BACKEND_TIMEOUT_MS = 20000;
     if ((el = t.closest('[data-loc-open]'))) return admLocOpen(el);
     if ((el = t.closest('[data-pen-why]'))) return admPenWhy(el);
     if ((el = t.closest('[data-person],[data-emp]'))) return admEmployee(el.getAttribute('data-person') || el.getAttribute('data-emp'));
+    if ((el = t.closest('[data-confirm-location]'))) return admConfirmLocation(el);
+    if ((el = t.closest('[data-wrong-location]'))) {
+      adm.sitesView = 'loc';
+      adm.locQ = el.getAttribute('data-wrong-location');
+      return admShowTab('sites');
+    }
     if ((el = t.closest('[data-home-loc]'))) { adm.pf = { q: '', locationId: el.getAttribute('data-home-loc'), status: 'all' }; return admShowTab('people'); }
     if ((el = t.closest('[data-pf-status]'))) { adm.pf.status = el.getAttribute('data-pf-status'); return admPeopleLoad(); }
 
